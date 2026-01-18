@@ -1,36 +1,74 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Logistics Distribution Web App
+
+A Next.js web application for automating logistics order distribution across drivers with WhatsApp sharing capabilities.
+
+## Features
+
+- **Google Sheets Integration** - Import orders and drivers from public Google Sheets
+- **Zone-Based Distribution** - Automatically distribute orders using pallet load balancing
+- **WhatsApp Sharing** - Copy distribution reports or share via WhatsApp links
+- **Activity Logging** - Track all actions with timestamped logs
+- **Dark Theme UI** - Modern, responsive interface
 
 ## Getting Started
 
-First, run the development server:
-
 ```bash
+# Install dependencies
+npm install
+
+# Run development server
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Google Sheets Format
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Your sheet must be **publicly accessible** with these columns:
 
-## Learn More
+### Orders Sheet (Sheet 1)
+| Required | Optional |
+|----------|----------|
+| PALLETS | DATE |
+| ZONE | PICKUP |
+| | DELIVERY |
+| | INVOICE |
 
-To learn more about Next.js, take a look at the following resources:
+### Drivers Sheet (Sheet 2)
+| Column | Description |
+|--------|-------------|
+| DRIVER NAME | Driver's name |
+| LORRY | Vehicle identifier |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Usage
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+1. **Import Data** - Paste Google Sheets URL and fetch data
+2. **Calculate Distribution** - Assign zones to drivers with load balancing
+3. **Add Admin Numbers** - Configure phone numbers for notifications
+4. **Share Report** - Copy to clipboard or open in WhatsApp
 
-## Deploy on Vercel
+## Tech Stack
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- Next.js 14 (App Router)
+- TypeScript
+- Tailwind CSS
+- localStorage (client-side storage)
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Project Structure
+
+```
+src/
+├── app/           # Pages (dashboard, sheets, distribution, admin, logs)
+├── components/    # UI components (Sidebar, StatCard, DriverCard, etc.)
+├── context/       # React Context for state management
+├── lib/           # Business logic (sheets, distribution, storage)
+└── types/         # TypeScript interfaces
+```
+
+## Key Differences from Original Electron App
+
+| Feature | Electron | Web App |
+|---------|----------|---------|
+| WhatsApp | QR scan + auto-send | Share links + clipboard |
+| Storage | File system | Browser localStorage |
+| Platform | Windows only | Any browser |

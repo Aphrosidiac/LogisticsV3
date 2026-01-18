@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #09090b;
+  --foreground: #fafafa;
 }
 
 @theme inline {
@@ -12,15 +12,83 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: "Inter", Arial, Helvetica, sans-serif;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #18181b;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #3f3f46;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #52525b;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.3s ease-out forwards;
+}
+
+/* Button styles */
+.btn-primary {
+  @apply px-6 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-semibold rounded-xl shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40 hover:scale-[1.02] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100;
+}
+
+.btn-secondary {
+  @apply px-6 py-3 bg-zinc-800 text-zinc-200 font-semibold rounded-xl border border-zinc-700 hover:bg-zinc-700 hover:border-zinc-600 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed;
+}
+
+.btn-danger {
+  @apply px-6 py-3 bg-rose-500/10 text-rose-400 font-semibold rounded-xl border border-rose-500/30 hover:bg-rose-500/20 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed;
+}
+
+/* Input styles */
+.input {
+  @apply w-full px-4 py-3 bg-zinc-800/50 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all duration-200;
+}
+
+/* Card styles */
+.card {
+  @apply bg-zinc-900/50 border border-zinc-800 rounded-2xl backdrop-blur-sm;
+}
+
+/* Alert styles */
+.alert-success {
+  @apply p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-emerald-400;
+}
+
+.alert-error {
+  @apply p-4 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-400;
+}
+
+.alert-warning {
+  @apply p-4 bg-orange-500/10 border border-orange-500/30 rounded-xl text-orange-400;
+}
+
+.alert-info {
+  @apply p-4 bg-blue-500/10 border border-blue-500/30 rounded-xl text-blue-400;
 }
