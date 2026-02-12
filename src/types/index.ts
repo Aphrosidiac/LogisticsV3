@@ -104,6 +104,7 @@ export interface TableSchema {
 }
 
 export interface AppConfig {
+  id?: string;
   adminNumbers: string[];
   manualDrivers: Driver[];
   whatsappConnected: boolean;

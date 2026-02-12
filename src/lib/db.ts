@@ -6,13 +6,7 @@ import type { Order, Driver, AppConfig, AppCache, LogEntry, DistributionResult, 
 interface LogisticsDB extends DBSchema {
     config: {
         key: string;
-        value: {
-            id: string;
-            adminNumbers: string[];
-            manualDrivers: Driver[];
-            whatsappConnected: boolean;
-            messageTemplates: MessageTemplate[];
-        };
+        value: AppConfig & { id: string };
     };
     sheets: {
         key: string;

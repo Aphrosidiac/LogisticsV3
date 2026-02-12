@@ -19,19 +19,41 @@ import {
 import { useApp } from '@/context/AppContext';
 import * as db from '@/lib/db';
 import * as csv from '@/lib/csv';
-import type { Sheet } from '@/types';
+import type { Sheet, TableSchema } from '@/types';
+import SchemaBuilder from '@/components/SchemaBuilder';
+import DynamicField from '@/components/DynamicField';
 
 export default function SheetsManagerPage() {
     const { addLog, dispatch } = useApp();
     const [sheets, setSheets] = useState<Sheet[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [showCreateModal, setShowCreateModal] = useState(false);
+    const [showSchemaBuilder, setShowSchemaBuilder] = useState(false);
+    const [schemaType, setSchemaType] = useState<'orders' | 'drivers'>('orders');
+    const [pendingTableName, setPendingTableName] = useState('');
+    const [schemas, setSchemas] = useState<{ orders?: TableSchema; drivers?: TableSchema }>({});
     const [activeSheetId, setActiveSheetId] = useState<string | null>(null);
     const [syncStatus, setSyncStatus] = useState<Record<string, 'synced' | 'syncing'>>({});
 
     useEffect(() => {
-        loadSheets();
+        loadData();
     }, []);
+
+    async function loadData() {
+        try {
+            const allSheets = await db.getAllSheets();
+            setSheets(allSheets);
+
+            // Load schemas
+            const ordersSchema = await db.getSchema('orders');
+            const driversSchema = await db.getSchema('drivers');
+            setSchemas({ orders: ordersSchema || undefined, drivers: driversSchema || undefined });
+        } catch (error: any) {
+            addLog('error', 'Failed to load data', error.message);
+        } finally {
+            setIsLoading(false);
+        }
+    }
 
     async function loadSheets() {
         try {
@@ -39,21 +61,53 @@ export default function SheetsManagerPage() {
             setSheets(allSheets);
         } catch (error: any) {
             addLog('error', 'Failed to load sheets', error.message);
-        } finally {
-            setIsLoading(false);
         }
     }
 
-    async function handleCreateSheet(name: string, type: 'orders' | 'drivers') {
+    async function handleCreateSheetRequest(name: string, type: 'orders' | 'drivers') {
+        // Check if schema exists for this type
+        const schema = schemas[type];
+
+        if (!schema) {
+            // Show schema builder first
+            setPendingTableName(name);
+            setSchemaType(type);
+            setShowCreateModal(false);
+            setShowSchemaBuilder(true);
+        } else {
+            // Schema exists, create sheet directly
+            await createSheetWithSchema(name, type, schema);
+        }
+    }
+
+    async function handleSaveSchema(schema: TableSchema) {
         try {
-            const headers = type === 'orders'
-                ? ['Zone', 'Pallets', 'Date', 'Pickup', 'Delivery', 'Invoice']
-                : ['Driver Name', 'Identifier'];
+            await db.saveSchema(schema.type, schema);
+            addLog('success', `Saved schema for ${schema.type}`);
+
+            // Update local state
+            setSchemas(prev => ({ ...prev, [schema.type]: schema }));
+
+            // Create the pending sheet
+            if (pendingTableName) {
+                await createSheetWithSchema(pendingTableName, schema.type, schema);
+                setPendingTableName('');
+            }
+
+            setShowSchemaBuilder(false);
+        } catch (error: any) {
+            addLog('error', 'Failed to save schema', error.message);
+        }
+    }
+
+    async function createSheetWithSchema(name: string, type: 'orders' | 'drivers', schema: TableSchema) {
+        try {
+            // Generate headers from schema fields
+            const headers = schema.fields.map(f => f.label);
 
             const newSheet = await db.createSheet(name, type, headers, []);
             addLog('success', `Created ${type} database: ${name}`);
             await loadSheets();
-            setShowCreateModal(false);
             setActiveSheetId(newSheet.id);
         } catch (error: any) {
             addLog('error', 'Failed to create database', error.message);
@@ -206,6 +260,7 @@ export default function SheetsManagerPage() {
                     {activeSheet ? (
                         <LiveSheetEditor
                             sheet={activeSheet}
+                            schema={schemas[activeSheet.type]}
                             onUpdate={async (updatedSheet) => {
                                 await db.updateSheet(updatedSheet.id, updatedSheet);
                                 await syncToSystem(updatedSheet);
@@ -241,7 +296,20 @@ export default function SheetsManagerPage() {
             {showCreateModal && (
                 <CreateSheetModal
                     onClose={() => setShowCreateModal(false)}
-                    onCreate={handleCreateSheet}
+                    onCreate={handleCreateSheetRequest}
+                />
+            )}
+
+            {/* Schema Builder Modal */}
+            {showSchemaBuilder && (
+                <SchemaBuilder
+                    type={schemaType}
+                    onSave={handleSaveSchema}
+                    onCancel={() => {
+                        setShowSchemaBuilder(false);
+                        setPendingTableName('');
+                    }}
+                    initialSchema={schemas[schemaType]}
                 />
             )}
         </div>
@@ -250,6 +318,7 @@ export default function SheetsManagerPage() {
 
 function LiveSheetEditor({
     sheet,
+    schema,
     onUpdate,
     onDelete,
     onExport,
@@ -257,6 +326,7 @@ function LiveSheetEditor({
     addLog
 }: {
     sheet: Sheet;
+    schema?: TableSchema;
     onUpdate: (sheet: Sheet) => void;
     onDelete: () => void;
     onExport: () => void;
@@ -373,6 +443,9 @@ function LiveSheetEditor({
                                 </td>
                                 {editedSheet.headers.map((header, colIndex) => {
                                     const isEditing = editingCell?.row === rowIndex && editingCell?.col === colIndex;
+                                    // Find field schema for this column
+                                    const fieldSchema = schema?.fields.find(f => f.label === header);
+
                                     return (
                                         <td
                                             key={colIndex}
@@ -380,10 +453,7 @@ function LiveSheetEditor({
                                             onClick={() => setEditingCell({ row: rowIndex, col: colIndex })}
                                         >
                                             {isEditing ? (
-                                                <input
-                                                    type="text"
-                                                    value={row[header] || ''}
-                                                    onChange={(e) => handleCellChange(rowIndex, colIndex, e.target.value)}
+                                                <div
                                                     onBlur={() => setEditingCell(null)}
                                                     onKeyDown={(e) => {
                                                         if (e.key === 'Enter') setEditingCell(null);
@@ -392,12 +462,29 @@ function LiveSheetEditor({
                                                             setEditingCell(null);
                                                         }
                                                     }}
-                                                    autoFocus
-                                                    className="w-full px-2 py-1 bg-zinc-900 text-white border border-emerald-500 rounded focus:outline-none"
-                                                />
+                                                >
+                                                    {fieldSchema ? (
+                                                        <DynamicField
+                                                            field={fieldSchema}
+                                                            value={row[header]}
+                                                            onChange={(value) => handleCellChange(rowIndex, colIndex, value)}
+                                                        />
+                                                    ) : (
+                                                        <input
+                                                            type="text"
+                                                            value={row[header] || ''}
+                                                            onChange={(e) => handleCellChange(rowIndex, colIndex, e.target.value)}
+                                                            autoFocus
+                                                            className="w-full px-2 py-1 bg-zinc-900 text-white border border-emerald-500 rounded focus:outline-none"
+                                                        />
+                                                    )}
+                                                </div>
                                             ) : (
                                                 <div className="px-2 py-1 text-sm text-zinc-200 min-h-[32px] flex items-center">
-                                                    {row[header] || <span className="text-zinc-600">-</span>}
+                                                    {fieldSchema?.type === 'checkbox'
+                                                        ? (row[header] ? '✓' : '✗')
+                                                        : (row[header] || <span className="text-zinc-600">-</span>)
+                                                    }
                                                 </div>
                                             )}
                                         </td>
