@@ -1,7 +1,7 @@
 // Utility functions
 
 export function generateId(): string {
-    return Math.random().toString(36).substring(2, 11);
+    return crypto.randomUUID();
 }
 
 export function formatTimestamp(date: Date = new Date()): string {

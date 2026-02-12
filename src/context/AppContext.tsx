@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
 import { AppConfig, AppCache, LogEntry, Order, Driver, DistributionResult } from '@/types';
-import * as storage from '@/lib/storage';
+import * as db from '@/lib/db';
 
 interface AppContextState {
     config: AppConfig;
@@ -19,16 +19,16 @@ type AppAction =
     | { type: 'SET_ORDERS'; payload: Order[] }
     | { type: 'SET_DRIVERS'; payload: Driver[] }
     | { type: 'SET_DISTRIBUTION'; payload: DistributionResult }
-    | { type: 'SET_SHEETS_URL'; payload: string }
     | { type: 'SET_ADMIN_NUMBERS'; payload: string[] }
     | { type: 'SET_LOADING'; payload: boolean }
     | { type: 'CLEAR_LOGS' };
 
 const initialState: AppContextState = {
     config: {
-        sheetsUrl: '',
         adminNumbers: [],
         manualDrivers: [],
+        whatsappConnected: false,
+        messageTemplates: [],
     },
     cache: {
         orders: [],
@@ -59,8 +59,6 @@ function appReducer(state: AppContextState, action: AppAction): AppContextState 
             return { ...state, cache: { ...state.cache, drivers: action.payload } };
         case 'SET_DISTRIBUTION':
             return { ...state, cache: { ...state.cache, lastDistribution: action.payload } };
-        case 'SET_SHEETS_URL':
-            return { ...state, config: { ...state.config, sheetsUrl: action.payload } };
         case 'SET_ADMIN_NUMBERS':
             return { ...state, config: { ...state.config, adminNumbers: action.payload } };
         case 'SET_LOADING':
@@ -83,35 +81,65 @@ const AppContext = createContext<AppContextValue | null>(null);
 export function AppProvider({ children }: { children: ReactNode }) {
     const [state, dispatch] = useReducer(appReducer, initialState);
 
-    // Load data from localStorage on mount
+    // Load data from IndexedDB on mount
     useEffect(() => {
-        const config = storage.getConfig();
-        const cache = storage.getCache();
-        const logs = storage.getLogs();
+        async function loadData() {
+            try {
+                const config = await db.getConfig();
+                const orders = await db.getAllOrders();
+                const drivers = await db.getAllDrivers();
+                const latestDist = await db.getLatestDistribution();
+                const logs = await db.getAllLogs();
 
-        dispatch({ type: 'SET_CONFIG', payload: config });
-        dispatch({ type: 'SET_CACHE', payload: cache });
-        dispatch({ type: 'SET_LOGS', payload: logs });
-        dispatch({ type: 'SET_LOADING', payload: false });
+                dispatch({ type: 'SET_CONFIG', payload: config });
+                dispatch({
+                    type: 'SET_CACHE',
+                    payload: {
+                        orders,
+                        drivers,
+                        lastDistribution: latestDist || null,
+                        lastFetch: null,
+                    },
+                });
+                dispatch({ type: 'SET_LOGS', payload: logs });
+            } catch (error) {
+                console.error('Failed to load data:', error);
+            } finally {
+                dispatch({ type: 'SET_LOADING', payload: false });
+            }
+        }
+        loadData();
     }, []);
 
-    // Save data to localStorage whenever it changes
-    const saveData = () => {
-        storage.saveConfig(state.config);
-        storage.saveCache(state.cache);
+    // Save data to IndexedDB whenever it changes
+    const saveData = async () => {
+        try {
+            await db.saveConfig(state.config);
+            if (state.cache.orders.length > 0) {
+                await db.saveOrders(state.cache.orders);
+            }
+            if (state.cache.drivers.length > 0) {
+                await db.saveDrivers(state.cache.drivers);
+            }
+        } catch (error) {
+            console.error('Failed to save data:', error);
+        }
     };
 
     // Helper to add logs
-    const addLog = (type: LogEntry['type'], message: string, details?: string) => {
-        const entry = storage.addLog({ type, message, details });
-        dispatch({ type: 'ADD_LOG', payload: entry });
+    const addLog = async (type: LogEntry['type'], message: string, details?: string) => {
+        try {
+            const entry = await db.addLog({ type, message, details });
+            dispatch({ type: 'ADD_LOG', payload: entry });
+        } catch (error) {
+            console.error('Failed to add log:', error);
+        }
     };
 
     // Auto-save on config/cache changes
     useEffect(() => {
         if (!state.isLoading) {
-            storage.saveConfig(state.config);
-            storage.saveCache(state.cache);
+            saveData();
         }
     }, [state.config, state.cache, state.isLoading]);
 

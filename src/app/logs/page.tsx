@@ -1,7 +1,7 @@
 'use client';
 
 import { useApp } from '@/context/AppContext';
-import { clearLogs } from '@/lib/storage';
+import * as db from '@/lib/db';
 import {
     ScrollText,
     Trash2,
@@ -41,8 +41,8 @@ const typeConfig = {
 export default function LogsPage() {
     const { logs, dispatch, addLog } = useApp();
 
-    const handleClearLogs = () => {
-        clearLogs();
+    const handleClearLogs = async () => {
+        await db.clearLogs();
         dispatch({ type: 'CLEAR_LOGS' });
         // Add one log entry to confirm clearing
         addLog('info', 'Logs cleared');

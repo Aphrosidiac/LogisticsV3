@@ -14,12 +14,16 @@ import {
     MapPin,
     Users,
     ArrowRight,
+    MessageSquare,
+    Send,
 } from 'lucide-react';
 import Link from 'next/link';
+import * as db from '@/lib/db';
 
 export default function DistributionPage() {
-    const { cache, dispatch, addLog } = useApp();
+    const { cache, dispatch, addLog, config } = useApp();
     const [isCalculating, setIsCalculating] = useState(false);
+    const [isSending, setIsSending] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     const hasData = cache.orders.length > 0 && cache.drivers.length > 0;
@@ -48,6 +52,68 @@ export default function DistributionPage() {
             addLog('error', 'Distribution calculation failed', message);
         } finally {
             setIsCalculating(false);
+        }
+    };
+
+    const handleSendWhatsApp = async () => {
+        if (!distribution || config.adminNumbers.length === 0) {
+            addLog('warning', 'No admin numbers configured. Please add them in Admin Settings.');
+            return;
+        }
+
+        setIsSending(true);
+        setError(null);
+
+        try {
+            addLog('info', 'Sending WhatsApp messages...');
+
+            let successCount = 0;
+            let failCount = 0;
+
+            for (const assignment of distribution.assignments) {
+                // Find admin number for this driver (simplified - using first admin number)
+                const recipient = config.adminNumbers[0];
+
+                const message = `*Driver Assignment*\n\n` +
+                    `Driver: ${assignment.driver.name} (${assignment.driver.identifier})\n` +
+                    `Zones: ${assignment.zones.join(', ')}\n` +
+                    `Orders: ${assignment.totalOrders}\n` +
+                    `Pallets: ${assignment.totalPallets}\n\n` +
+                    `Orders:\n${assignment.orders.map(o =>
+                        `- Zone ${o.zone}: ${o.pallets} pallets`
+                    ).join('\n')}`;
+
+                try {
+                    await db.addWhatsAppMessage(recipient, message);
+
+                    const response = await fetch('/api/whatsapp/send', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ recipient, message }),
+                    });
+
+                    if (response.ok) {
+                        successCount++;
+                    } else {
+                        failCount++;
+                    }
+                } catch (err) {
+                    failCount++;
+                }
+            }
+
+            if (successCount > 0) {
+                addLog('success', `Sent ${successCount} WhatsApp messages`);
+            }
+            if (failCount > 0) {
+                addLog('warning', `Failed to send ${failCount} messages`);
+            }
+        } catch (err) {
+            const message = err instanceof Error ? err.message : 'Failed to send messages';
+            setError(message);
+            addLog('error', 'WhatsApp sending failed', message);
+        } finally {
+            setIsSending(false);
         }
     };
 
@@ -99,10 +165,10 @@ export default function DistributionPage() {
                     </div>
                     <h2 className="text-xl font-semibold text-white mb-2">No Data Available</h2>
                     <p className="text-zinc-500 mb-6">
-                        Import orders from Google Sheets before calculating distribution
+                        Import orders and drivers before calculating distribution
                     </p>
-                    <Link href="/sheets" className="btn-primary inline-flex items-center gap-2">
-                        Import Data
+                    <Link href="/sheets-manager" className="btn-primary inline-flex items-center gap-2">
+                        Manage Data
                         <ArrowRight className="w-4 h-4" />
                     </Link>
                 </div>
@@ -188,18 +254,53 @@ export default function DistributionPage() {
                     )}
 
                     {/* Next Action */}
-                    <div className="card p-6 bg-gradient-to-r from-emerald-500/10 to-teal-500/10 border-emerald-500/20">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <h3 className="text-lg font-semibold text-white">Ready to Notify?</h3>
-                                <p className="text-zinc-400 text-sm">
-                                    Share this distribution with your admin team
-                                </p>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div className="card p-6 bg-gradient-to-r from-emerald-500/10 to-teal-500/10 border-emerald-500/20">
+                            <div className="flex flex-col gap-4">
+                                <div>
+                                    <h3 className="text-lg font-semibold text-white">Send via WhatsApp</h3>
+                                    <p className="text-zinc-400 text-sm">
+                                        Automatically send assignments to drivers
+                                    </p>
+                                </div>
+                                <button
+                                    onClick={handleSendWhatsApp}
+                                    disabled={isSending || config.adminNumbers.length === 0}
+                                    className="btn-primary flex items-center justify-center gap-2 w-full disabled:opacity-50"
+                                >
+                                    {isSending ? (
+                                        <>
+                                            <RefreshCw className="w-5 h-5 animate-spin" />
+                                            Sending...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <MessageSquare className="w-5 h-5" />
+                                            Send Messages
+                                        </>
+                                    )}
+                                </button>
+                                {config.adminNumbers.length === 0 && (
+                                    <p className="text-xs text-yellow-400">
+                                        ⚠️ Configure admin numbers in settings first
+                                    </p>
+                                )}
                             </div>
-                            <Link href="/admin" className="btn-primary flex items-center gap-2">
-                                Go to Admin Settings
-                                <ArrowRight className="w-4 h-4" />
-                            </Link>
+                        </div>
+
+                        <div className="card p-6 bg-gradient-to-r from-blue-500/10 to-purple-500/10 border-blue-500/20">
+                            <div className="flex flex-col gap-4">
+                                <div>
+                                    <h3 className="text-lg font-semibold text-white">Admin Settings</h3>
+                                    <p className="text-zinc-400 text-sm">
+                                        Configure numbers and WhatsApp connection
+                                    </p>
+                                </div>
+                                <Link href="/admin" className="btn-primary flex items-center justify-center gap-2 w-full">
+                                    Go to Settings
+                                    <ArrowRight className="w-4 h-4" />
+                                </Link>
+                            </div>
                         </div>
                     </div>
                 </>
