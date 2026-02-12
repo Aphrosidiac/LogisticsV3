@@ -77,12 +77,43 @@ export interface MessageTemplate {
   content: string;
 }
 
+// Field schema for flexible database configuration
+export type FieldType = 'text' | 'number' | 'date' | 'dropdown' | 'checkbox';
+
+export interface FieldSchema {
+  id: string;
+  name: string;  // Field name (e.g., "zone", "pallets", "customer")
+  label: string; // Display label (e.g., "Zone", "Pallets", "Customer Name")
+  type: FieldType;
+  required: boolean;
+  isUnitField?: boolean; // For orders: marks the quantity field used in distribution
+  isCoreField?: boolean; // Cannot be deleted (zone, driver name, etc.)
+  options?: string[]; // For dropdown type
+  defaultValue?: any;
+}
+
+export interface TableSchema {
+  id: string;
+  name: string;
+  type: 'orders' | 'drivers';
+  fields: FieldSchema[];
+  unitFieldId?: string; // ID of the field that represents quantity (for orders)
+  unitName?: string; // Display name for unit (e.g., "pallets", "boxes", "kg")
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface AppConfig {
+  id?: string;
   adminNumbers: string[];
   manualDrivers: Driver[];
   whatsappConnected: boolean;
   messageTemplates: MessageTemplate[];
   passwordHash?: string;
+  schemas?: {
+    orders?: TableSchema;
+    drivers?: TableSchema;
+  };
 }
 
 export interface AppCache {
