@@ -132,7 +132,7 @@ export default function Dashboard() {
               <AlertCircle className="w-5 h-5 text-zinc-500" />
             )}
             <span className={hasData ? 'text-zinc-200' : 'text-zinc-500'}>
-              Data imported from Google Sheets
+              Database data loaded ({cache.orders.length} orders, {cache.drivers.length} drivers)
             </span>
           </div>
           <div className="flex items-center gap-3">
