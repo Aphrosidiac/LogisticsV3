@@ -211,52 +211,59 @@ export default function SheetsManagerPage() {
                 </button>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                {/* Sidebar - Database List */}
-                <div className="lg:col-span-1 space-y-3">
-                    <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-wide">Databases</h2>
-                    {sheets.map((sheet) => (
-                        <button
-                            key={sheet.id}
-                            onClick={() => setActiveSheetId(sheet.id)}
-                            className={`w-full text-left p-4 rounded-xl border transition-all ${
-                                activeSheetId === sheet.id
-                                    ? 'bg-emerald-500/10 border-emerald-500/50'
-                                    : 'bg-zinc-800/50 border-zinc-700 hover:border-zinc-600'
-                            }`}
-                        >
-                            <div className="flex items-start justify-between mb-2">
-                                <div className="flex items-center gap-2">
-                                    <Database className="w-4 h-4 text-emerald-400" />
-                                    <h3 className="font-semibold text-white text-sm">{sheet.name}</h3>
-                                </div>
-                                {syncStatus[sheet.id] === 'syncing' && (
-                                    <RefreshCw className="w-4 h-4 text-emerald-400 animate-spin" />
-                                )}
-                            </div>
-                            <div className="flex items-center gap-2 text-xs">
-                                <span className={`px-2 py-0.5 rounded ${
-                                    sheet.type === 'orders'
-                                        ? 'bg-blue-500/20 text-blue-400'
-                                        : 'bg-purple-500/20 text-purple-400'
-                                }`}>
-                                    {sheet.type}
-                                </span>
-                                <span className="text-zinc-500">{sheet.data.length} rows</span>
-                            </div>
-                        </button>
-                    ))}
-
-                    {sheets.length === 0 && (
-                        <div className="text-center py-8 px-4 bg-zinc-800/30 rounded-xl border border-zinc-700/50">
-                            <FileSpreadsheet className="w-8 h-8 text-zinc-600 mx-auto mb-2" />
-                            <p className="text-sm text-zinc-500">No databases yet</p>
-                        </div>
-                    )}
+            {/* Database Tabs - Horizontal at Top */}
+            <div className="bg-zinc-900/50 rounded-xl border border-zinc-800 p-4">
+                <div className="flex items-center gap-2 mb-3">
+                    <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-wide">
+                        Databases
+                    </h2>
+                    <span className="text-xs text-zinc-600">({sheets.length})</span>
                 </div>
 
-                {/* Main Content - Live Editor */}
-                <div className="lg:col-span-3">
+                {sheets.length > 0 ? (
+                    <div className="flex gap-2 overflow-x-auto pb-2">
+                        {sheets.map((sheet) => (
+                            <button
+                                key={sheet.id}
+                                onClick={() => setActiveSheetId(sheet.id)}
+                                className={`flex-shrink-0 flex items-center gap-3 px-4 py-2.5 rounded-lg border transition-all ${
+                                    activeSheetId === sheet.id
+                                        ? 'bg-emerald-500/10 border-emerald-500/50 shadow-lg'
+                                        : 'bg-zinc-800/50 border-zinc-700 hover:border-zinc-600 hover:bg-zinc-800'
+                                }`}
+                            >
+                                <Database className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                                <div className="flex items-center gap-3">
+                                    <span className="font-medium text-white text-sm whitespace-nowrap">
+                                        {sheet.name}
+                                    </span>
+                                    <div className="flex items-center gap-2">
+                                        <span className={`px-2 py-0.5 rounded text-xs ${
+                                            sheet.type === 'orders'
+                                                ? 'bg-blue-500/20 text-blue-400'
+                                                : 'bg-purple-500/20 text-purple-400'
+                                        }`}>
+                                            {sheet.type}
+                                        </span>
+                                        <span className="text-xs text-zinc-500">{sheet.data.length} rows</span>
+                                    </div>
+                                </div>
+                                {syncStatus[sheet.id] === 'syncing' && (
+                                    <RefreshCw className="w-4 h-4 text-emerald-400 animate-spin flex-shrink-0" />
+                                )}
+                            </button>
+                        ))}
+                    </div>
+                ) : (
+                    <div className="text-center py-6 px-4 bg-zinc-800/30 rounded-lg border border-zinc-700/50 border-dashed">
+                        <FileSpreadsheet className="w-8 h-8 text-zinc-600 mx-auto mb-2" />
+                        <p className="text-sm text-zinc-500">No databases yet. Click "New Database" to get started.</p>
+                    </div>
+                )}
+            </div>
+
+            {/* Main Content - Live Editor (Full Width) */}
+            <div>
                     {activeSheet ? (
                         <LiveSheetEditor
                             sheet={activeSheet}
@@ -289,7 +296,6 @@ export default function SheetsManagerPage() {
                             </button>
                         </div>
                     )}
-                </div>
             </div>
 
             {/* Create Sheet Modal */}

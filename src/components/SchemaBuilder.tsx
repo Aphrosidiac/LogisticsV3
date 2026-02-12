@@ -142,10 +142,10 @@ export default function SchemaBuilder({ type, onSave, onCancel, initialSchema }:
     };
 
     return (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 overflow-y-auto">
-            <div className="bg-zinc-900 rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto border border-zinc-800">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+            <div className="bg-zinc-900 rounded-xl w-full max-w-5xl max-h-[90vh] flex flex-col border border-zinc-800 shadow-2xl">
                 {/* Header */}
-                <div className="sticky top-0 bg-zinc-900 border-b border-zinc-800 p-6 z-10">
+                <div className="flex-shrink-0 border-b border-zinc-800 p-6">
                     <h2 className="text-2xl font-bold text-white mb-2">
                         Configure {type === 'orders' ? 'Orders' : 'Drivers'} Table
                     </h2>
@@ -154,7 +154,8 @@ export default function SchemaBuilder({ type, onSave, onCancel, initialSchema }:
                     </p>
                 </div>
 
-                <div className="p-6 space-y-6">
+                {/* Scrollable Content */}
+                <div className="flex-1 overflow-y-auto p-6 space-y-6">
                     {/* Table Name */}
                     <div>
                         <label className="block text-sm font-medium text-zinc-300 mb-2">
@@ -203,19 +204,19 @@ export default function SchemaBuilder({ type, onSave, onCancel, initialSchema }:
                             </button>
                         </div>
 
-                        <div className="space-y-3">
+                        <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
                             {fields.map((field, index) => (
                                 <div
                                     key={field.id}
-                                    className="card p-4 bg-zinc-800/50 border-zinc-700"
+                                    className="bg-zinc-800/70 border border-zinc-700 rounded-lg p-3 hover:border-zinc-600 transition-colors"
                                 >
                                     <div className="flex items-start gap-3">
                                         {!field.isCoreField && (
-                                            <GripVertical className="w-5 h-5 text-zinc-600 mt-2 flex-shrink-0" />
+                                            <GripVertical className="w-4 h-4 text-zinc-600 mt-2 flex-shrink-0" />
                                         )}
 
-                                        <div className="flex-1 space-y-3">
-                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                        <div className="flex-1 space-y-2.5">
+                                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                                                 {/* Field Name */}
                                                 <div>
                                                     <label className="block text-xs text-zinc-400 mb-1">
@@ -363,11 +364,11 @@ export default function SchemaBuilder({ type, onSave, onCancel, initialSchema }:
                 </div>
 
                 {/* Footer */}
-                <div className="sticky bottom-0 bg-zinc-900 border-t border-zinc-800 p-6 flex gap-3 justify-end">
-                    <button onClick={onCancel} className="btn-secondary">
+                <div className="flex-shrink-0 border-t border-zinc-800 p-6 flex gap-3 justify-end bg-zinc-900/95 backdrop-blur">
+                    <button onClick={onCancel} className="btn-secondary px-6">
                         Cancel
                     </button>
-                    <button onClick={handleSave} className="btn-primary">
+                    <button onClick={handleSave} className="btn-primary px-6">
                         {initialSchema ? 'Update Schema' : 'Create Table'}
                     </button>
                 </div>
