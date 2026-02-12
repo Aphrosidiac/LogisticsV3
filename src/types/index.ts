@@ -51,10 +51,38 @@ export interface LogEntry {
   details?: string;
 }
 
+export interface Sheet {
+  id: string;
+  name: string;
+  type: 'orders' | 'drivers';
+  headers: string[];
+  data: Record<string, any>[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WhatsAppMessage {
+  id: string;
+  recipient: string;
+  message: string;
+  status: 'pending' | 'sent' | 'failed';
+  sentAt?: string;
+  error?: string;
+  distributionId?: string;
+}
+
+export interface MessageTemplate {
+  id: string;
+  name: string;
+  content: string;
+}
+
 export interface AppConfig {
-  sheetsUrl: string;
   adminNumbers: string[];
   manualDrivers: Driver[];
+  whatsappConnected: boolean;
+  messageTemplates: MessageTemplate[];
+  passwordHash?: string;
 }
 
 export interface AppCache {
@@ -68,4 +96,5 @@ export interface AppState {
   config: AppConfig;
   cache: AppCache;
   logs: LogEntry[];
+  isAuthenticated: boolean;
 }

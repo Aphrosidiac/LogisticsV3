@@ -9,12 +9,18 @@ import {
     Settings,
     ScrollText,
     Package,
+    Users,
+    MessageSquare,
+    Database,
 } from 'lucide-react';
 
 const navItems = [
     { href: '/', label: 'Dashboard', icon: LayoutDashboard },
-    { href: '/sheets', label: 'Google Sheets', icon: FileSpreadsheet },
+    { href: '/sheets-manager', label: 'Sheets Manager', icon: FileSpreadsheet },
+    { href: '/drivers', label: 'Drivers', icon: Users },
     { href: '/distribution', label: 'Distribution', icon: Truck },
+    { href: '/whatsapp', label: 'WhatsApp', icon: MessageSquare },
+    { href: '/backup', label: 'Backup & Restore', icon: Database },
     { href: '/admin', label: 'Admin Settings', icon: Settings },
     { href: '/logs', label: 'Activity Logs', icon: ScrollText },
 ];
@@ -62,7 +68,7 @@ export default function Sidebar() {
             {/* Footer */}
             <div className="p-4 border-t border-zinc-800">
                 <p className="text-xs text-zinc-600 text-center">
-                    Logistics Distribution v2.0
+                    Logistics Distribution v3.0
                 </p>
             </div>
         </aside>
