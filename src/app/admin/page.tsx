@@ -1,11 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useApp } from '@/context/AppContext';
 import { formatDistributionMessage } from '@/lib/distribution';
 import { formatPhoneNumber, validatePhoneNumber } from '@/lib/utils';
+import * as db from '@/lib/db';
 import PhoneChip from '@/components/PhoneChip';
 import Modal from '@/components/Modal';
+import SchemaBuilder from '@/components/SchemaBuilder';
+import type { TableSchema } from '@/types';
 import {
     Settings,
     Phone,
@@ -17,6 +20,9 @@ import {
     AlertCircle,
     CheckCircle2,
     MessageSquare,
+    Database,
+    Edit,
+    FileText,
 } from 'lucide-react';
 
 export default function AdminPage() {
@@ -25,6 +31,43 @@ export default function AdminPage() {
     const [phoneError, setPhoneError] = useState<string | null>(null);
     const [showPreview, setShowPreview] = useState(false);
     const [copied, setCopied] = useState(false);
+    const [schemas, setSchemas] = useState<{ orders?: TableSchema; drivers?: TableSchema }>({});
+    const [showSchemaBuilder, setShowSchemaBuilder] = useState(false);
+    const [editingSchemaType, setEditingSchemaType] = useState<'orders' | 'drivers' | null>(null);
+
+    useEffect(() => {
+        loadSchemas();
+    }, []);
+
+    async function loadSchemas() {
+        try {
+            const ordersSchema = await db.getSchema('orders');
+            const driversSchema = await db.getSchema('drivers');
+            setSchemas({
+                orders: ordersSchema || undefined,
+                drivers: driversSchema || undefined,
+            });
+        } catch (error: any) {
+            addLog('error', 'Failed to load schemas', error.message);
+        }
+    }
+
+    async function handleSaveSchema(schema: TableSchema) {
+        try {
+            await db.saveSchema(schema.type, schema);
+            addLog('success', `Saved ${schema.type} schema`);
+            await loadSchemas();
+            setShowSchemaBuilder(false);
+            setEditingSchemaType(null);
+        } catch (error: any) {
+            addLog('error', 'Failed to save schema', error.message);
+        }
+    }
+
+    function handleEditSchema(type: 'orders' | 'drivers') {
+        setEditingSchemaType(type);
+        setShowSchemaBuilder(true);
+    }
 
     const handleAddPhone = () => {
         const cleaned = formatPhoneNumber(phoneInput);
@@ -103,8 +146,146 @@ export default function AdminPage() {
             <div>
                 <h1 className="text-3xl font-bold text-white">Admin Settings</h1>
                 <p className="text-zinc-500 mt-1">
-                    Manage admin phone numbers and send distribution notifications
+                    Manage database schemas, admin phone numbers, and distribution notifications
                 </p>
+            </div>
+
+            {/* Database Schemas */}
+            <div className="card p-6">
+                <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                    <Database className="w-5 h-5 text-emerald-400" />
+                    Database Schemas
+                </h2>
+                <p className="text-sm text-zinc-400 mb-4">
+                    Configure the structure and fields for your orders and drivers databases
+                </p>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Orders Schema */}
+                    <div className="bg-zinc-800/50 rounded-lg p-4 border border-zinc-700">
+                        <div className="flex items-start justify-between mb-3">
+                            <div>
+                                <h3 className="font-semibold text-white flex items-center gap-2">
+                                    <FileText className="w-4 h-4 text-blue-400" />
+                                    Orders Schema
+                                </h3>
+                                <p className="text-xs text-zinc-500 mt-1">
+                                    {schemas.orders ? 'Configured' : 'Not configured'}
+                                </p>
+                            </div>
+                            {schemas.orders ? (
+                                <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                            ) : (
+                                <AlertCircle className="w-5 h-5 text-zinc-500" />
+                            )}
+                        </div>
+
+                        {schemas.orders ? (
+                            <div className="space-y-2 mb-3">
+                                <div className="text-xs text-zinc-400">
+                                    <span className="font-medium">Fields:</span>{' '}
+                                    {schemas.orders.fields.length}
+                                </div>
+                                <div className="text-xs text-zinc-400">
+                                    <span className="font-medium">Unit:</span>{' '}
+                                    {schemas.orders.unitName || 'pallets'}
+                                </div>
+                                <div className="flex flex-wrap gap-1 mt-2">
+                                    {schemas.orders.fields.slice(0, 4).map((field) => (
+                                        <span
+                                            key={field.id}
+                                            className="px-2 py-0.5 bg-zinc-700/50 text-zinc-300 rounded text-xs"
+                                        >
+                                            {field.label}
+                                        </span>
+                                    ))}
+                                    {schemas.orders.fields.length > 4 && (
+                                        <span className="px-2 py-0.5 bg-zinc-700/50 text-zinc-400 rounded text-xs">
+                                            +{schemas.orders.fields.length - 4} more
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
+                        ) : (
+                            <p className="text-xs text-zinc-500 mb-3">
+                                Schema not configured yet. Create your first orders database to set it up.
+                            </p>
+                        )}
+
+                        <button
+                            onClick={() => handleEditSchema('orders')}
+                            disabled={!schemas.orders}
+                            className="btn-secondary w-full text-sm flex items-center justify-center gap-2"
+                        >
+                            <Edit className="w-4 h-4" />
+                            {schemas.orders ? 'Edit Schema' : 'Not Available'}
+                        </button>
+                    </div>
+
+                    {/* Drivers Schema */}
+                    <div className="bg-zinc-800/50 rounded-lg p-4 border border-zinc-700">
+                        <div className="flex items-start justify-between mb-3">
+                            <div>
+                                <h3 className="font-semibold text-white flex items-center gap-2">
+                                    <FileText className="w-4 h-4 text-purple-400" />
+                                    Drivers Schema
+                                </h3>
+                                <p className="text-xs text-zinc-500 mt-1">
+                                    {schemas.drivers ? 'Configured' : 'Not configured'}
+                                </p>
+                            </div>
+                            {schemas.drivers ? (
+                                <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                            ) : (
+                                <AlertCircle className="w-5 h-5 text-zinc-500" />
+                            )}
+                        </div>
+
+                        {schemas.drivers ? (
+                            <div className="space-y-2 mb-3">
+                                <div className="text-xs text-zinc-400">
+                                    <span className="font-medium">Fields:</span>{' '}
+                                    {schemas.drivers.fields.length}
+                                </div>
+                                <div className="flex flex-wrap gap-1 mt-2">
+                                    {schemas.drivers.fields.slice(0, 4).map((field) => (
+                                        <span
+                                            key={field.id}
+                                            className="px-2 py-0.5 bg-zinc-700/50 text-zinc-300 rounded text-xs"
+                                        >
+                                            {field.label}
+                                        </span>
+                                    ))}
+                                    {schemas.drivers.fields.length > 4 && (
+                                        <span className="px-2 py-0.5 bg-zinc-700/50 text-zinc-400 rounded text-xs">
+                                            +{schemas.drivers.fields.length - 4} more
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
+                        ) : (
+                            <p className="text-xs text-zinc-500 mb-3">
+                                Schema not configured yet. Create your first drivers database to set it up.
+                            </p>
+                        )}
+
+                        <button
+                            onClick={() => handleEditSchema('drivers')}
+                            disabled={!schemas.drivers}
+                            className="btn-secondary w-full text-sm flex items-center justify-center gap-2"
+                        >
+                            <Edit className="w-4 h-4" />
+                            {schemas.drivers ? 'Edit Schema' : 'Not Available'}
+                        </button>
+                    </div>
+                </div>
+
+                <div className="mt-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                    <p className="text-sm text-blue-400">
+                        <strong>Note:</strong> Schemas are created when you make your first database of each
+                        type. Go to Database Manager to create and configure your schemas.
+                    </p>
+                </div>
             </div>
 
             {/* Phone Numbers */}
@@ -273,6 +454,19 @@ export default function AdminPage() {
                     {getDistributionMessage() || 'No distribution available'}
                 </pre>
             </Modal>
+
+            {/* Schema Builder Modal */}
+            {showSchemaBuilder && editingSchemaType && (
+                <SchemaBuilder
+                    type={editingSchemaType}
+                    onSave={handleSaveSchema}
+                    onCancel={() => {
+                        setShowSchemaBuilder(false);
+                        setEditingSchemaType(null);
+                    }}
+                    initialSchema={schemas[editingSchemaType]}
+                />
+            )}
         </div>
     );
 }
