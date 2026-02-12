@@ -16,11 +16,11 @@ import {
 
 const navItems = [
     { href: '/', label: 'Dashboard', icon: LayoutDashboard },
-    { href: '/sheets-manager', label: 'Sheets Manager', icon: FileSpreadsheet },
+    { href: '/sheets-manager', label: 'Database Manager', icon: Database },
     { href: '/drivers', label: 'Drivers', icon: Users },
     { href: '/distribution', label: 'Distribution', icon: Truck },
     { href: '/whatsapp', label: 'WhatsApp', icon: MessageSquare },
-    { href: '/backup', label: 'Backup & Restore', icon: Database },
+    { href: '/backup', label: 'Backup & Restore', icon: FileSpreadsheet },
     { href: '/admin', label: 'Admin Settings', icon: Settings },
     { href: '/logs', label: 'Activity Logs', icon: ScrollText },
 ];

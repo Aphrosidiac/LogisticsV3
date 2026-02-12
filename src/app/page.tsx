@@ -81,14 +81,14 @@ export default function Dashboard() {
         <h2 className="text-lg font-semibold text-white mb-4">Quick Actions</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Link
-            href="/sheets"
+            href="/sheets-manager"
             className="flex items-center justify-between p-4 bg-zinc-800/50 rounded-xl border border-zinc-700 hover:border-zinc-600 hover:bg-zinc-800 transition-all group"
           >
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-lg bg-blue-500/20">
                 <FileSpreadsheet className="w-5 h-5 text-blue-400" />
               </div>
-              <span className="font-medium text-zinc-200">Import Data</span>
+              <span className="font-medium text-zinc-200">Database Manager</span>
             </div>
             <ArrowRight className="w-5 h-5 text-zinc-500 group-hover:text-zinc-200 group-hover:translate-x-1 transition-all" />
           </Link>
