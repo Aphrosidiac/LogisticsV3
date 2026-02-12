@@ -154,6 +154,10 @@ export async function getConfig(): Promise<AppConfig> {
                 content: 'Hello {driver},\n\nYour delivery assignment:\n{zones}\nTotal: {pallets} pallets\n\nThank you!',
             },
         ],
+        schemas: {
+            orders: undefined,
+            drivers: undefined,
+        },
     };
 }
 
@@ -161,6 +165,25 @@ export async function saveConfig(config: Partial<AppConfig>) {
     const db = await getDB();
     const current = await getConfig();
     await db.put('config', { id: 'main', ...current, ...config });
+}
+
+// Schema operations
+export async function saveSchema(type: 'orders' | 'drivers', schema: any) {
+    const db = await getDB();
+    const config = await getConfig();
+    await db.put('config', {
+        id: 'main',
+        ...config,
+        schemas: {
+            ...config.schemas,
+            [type]: schema,
+        },
+    });
+}
+
+export async function getSchema(type: 'orders' | 'drivers') {
+    const config = await getConfig();
+    return config.schemas?.[type] || null;
 }
 
 // Sheet operations
