@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
 import { AppConfig, AppCache, LogEntry, Order, Driver, DistributionResult } from '@/types';
-import * as db from '@/lib/db';
+import * as db from '@/lib/db-supabase';
 
 interface AppContextState {
     config: AppConfig;

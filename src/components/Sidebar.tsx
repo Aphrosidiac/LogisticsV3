@@ -12,6 +12,7 @@ import {
     MessageSquare,
     Database,
     Clock,
+    Upload,
 } from 'lucide-react';
 
 const navItems = [
@@ -19,6 +20,7 @@ const navItems = [
     { href: '/sheets-manager', label: 'Database Manager', icon: Database },
     { href: '/distribution', label: 'Distribution', icon: Truck },
     { href: '/balances', label: 'Pending Balances', icon: Clock },
+    { href: '/migrate', label: 'Database Migration', icon: Upload },
     { href: '/whatsapp', label: 'WhatsApp', icon: MessageSquare },
     { href: '/backup', label: 'Backup & Restore', icon: FileSpreadsheet },
     { href: '/admin', label: 'Admin Settings', icon: Settings },

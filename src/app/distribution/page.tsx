@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useApp } from '@/context/AppContext';
-import { calculateDistribution } from '@/lib/distribution';
+import { calculateDistribution, getTomorrowDate } from '@/lib/distribution';
+import { getPendingBalancesForDate, convertBalancesToOrders, batchCreateBalances } from '@/lib/balances';
 import DriverCard from '@/components/DriverCard';
 import StatCard from '@/components/StatCard';
 import {
@@ -15,30 +16,81 @@ import {
     Users,
     ArrowRight,
     MessageSquare,
-    Send,
+    Calendar,
+    Clock,
 } from 'lucide-react';
 import Link from 'next/link';
-import * as db from '@/lib/db';
+import * as db from '@/lib/db-supabase';
 
 export default function DistributionPage() {
     const { cache, dispatch, addLog, config } = useApp();
     const [isCalculating, setIsCalculating] = useState(false);
     const [isSending, setIsSending] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [targetDate, setTargetDate] = useState(getTomorrowDate());
+    const [balanceCount, setBalanceCount] = useState(0);
+    const [loadingBalances, setLoadingBalances] = useState(false);
 
     const hasData = cache.orders.length > 0 && cache.drivers.length > 0;
     const distribution = cache.lastDistribution;
 
-    const handleCalculate = () => {
+    // Load balances when date changes
+    useEffect(() => {
+        loadBalancesForDate();
+    }, [targetDate]);
+
+    const loadBalancesForDate = async () => {
+        setLoadingBalances(true);
+        try {
+            const balances = await getPendingBalancesForDate(targetDate);
+            setBalanceCount(balances.length);
+
+            if (balances.length > 0) {
+                addLog('info', `Found ${balances.length} pending balance(s) for ${targetDate}`);
+            }
+        } catch (error) {
+            console.error('Error loading balances:', error);
+        } finally {
+            setLoadingBalances(false);
+        }
+    };
+
+    const handleCalculate = async () => {
         if (!hasData) return;
 
         setIsCalculating(true);
         setError(null);
 
         try {
-            addLog('info', 'Calculating distribution...');
+            addLog('info', `Calculating distribution for ${targetDate}...`);
 
-            const result = calculateDistribution(cache.orders, cache.drivers);
+            // Load pending balances for this date
+            const balances = await getPendingBalancesForDate(targetDate);
+            let ordersToDistribute = cache.orders;
+
+            // Convert balances to high-priority orders
+            if (balances.length > 0) {
+                const balanceOrders = await convertBalancesToOrders(balances);
+                ordersToDistribute = [...balanceOrders, ...cache.orders];
+                addLog('info', `Merged ${balances.length} pending balance(s) with ${cache.orders.length} regular order(s)`);
+            }
+
+            // Calculate distribution with target date
+            const result = calculateDistribution(ordersToDistribute, cache.drivers, targetDate);
+
+            // Save distribution to database
+            const distributionId = await db.saveDistribution(result);
+
+            // Save pending balances to database
+            if (result.pendingBalances && result.pendingBalances.length > 0) {
+                const balanceResult = await batchCreateBalances(result.pendingBalances, distributionId);
+
+                if (balanceResult.success) {
+                    addLog('success', `Created ${balanceResult.created} pending balance(s) for next day`);
+                } else {
+                    addLog('warning', `Balance creation had errors: ${balanceResult.errors.join(', ')}`);
+                }
+            }
 
             dispatch({ type: 'SET_DISTRIBUTION', payload: result });
 
@@ -46,6 +98,10 @@ export default function DistributionPage() {
                 'success',
                 `Distribution calculated: ${result.summary.assignedDrivers} drivers assigned to ${result.summary.totalZones} zones`
             );
+
+            if (result.summary.balancesCreated && result.summary.balancesCreated > 0) {
+                addLog('info', `${result.summary.balancesCreated} order(s) created pending balances for next day`);
+            }
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Failed to calculate distribution';
             setError(message);
@@ -71,7 +127,6 @@ export default function DistributionPage() {
             let failCount = 0;
 
             for (const assignment of distribution.assignments) {
-                // Find admin number for this driver (simplified - using first admin number)
                 const recipient = config.adminNumbers[0];
 
                 const message = `*Driver Assignment*\n\n` +
@@ -149,6 +204,62 @@ export default function DistributionPage() {
                 )}
             </div>
 
+            {/* Date Picker & Balance Info */}
+            {hasData && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Date Picker */}
+                    <div className="card p-6">
+                        <label className="block text-sm font-medium text-zinc-300 mb-3">
+                            <Calendar className="w-4 h-4 inline mr-2" />
+                            Target Delivery Date
+                        </label>
+                        <input
+                            type="date"
+                            value={targetDate}
+                            onChange={(e) => setTargetDate(e.target.value)}
+                            className="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-lg text-zinc-200 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                        />
+                        <p className="text-xs text-zinc-500 mt-2">
+                            Only orders for this date will be included in distribution
+                        </p>
+                    </div>
+
+                    {/* Pending Balances Info */}
+                    <div className="card p-6">
+                        <div className="flex items-center justify-between mb-3">
+                            <label className="text-sm font-medium text-zinc-300">
+                                <Clock className="w-4 h-4 inline mr-2" />
+                                Pending Balances
+                            </label>
+                            {loadingBalances && (
+                                <RefreshCw className="w-4 h-4 animate-spin text-zinc-500" />
+                            )}
+                        </div>
+
+                        {balanceCount > 0 ? (
+                            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4">
+                                <p className="text-yellow-400 font-medium">
+                                    {balanceCount} pending balance(s) found
+                                </p>
+                                <p className="text-sm text-zinc-400 mt-1">
+                                    These will be automatically included as high-priority orders
+                                </p>
+                                <Link
+                                    href="/balances"
+                                    className="text-sm text-blue-400 hover:text-blue-300 mt-2 inline-block"
+                                >
+                                    View all balances →
+                                </Link>
+                            </div>
+                        ) : (
+                            <div className="text-zinc-400 text-sm">
+                                No pending balances for this date
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+
             {/* Error */}
             {error && (
                 <div className="alert-error flex items-center gap-3">
@@ -178,7 +289,7 @@ export default function DistributionPage() {
             {distribution && (
                 <>
                     {/* Summary Stats */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
                         <StatCard
                             title="Total Orders"
                             value={distribution.summary.totalOrders}
@@ -203,12 +314,26 @@ export default function DistributionPage() {
                             icon={Users}
                             color="blue"
                         />
+                        {distribution.summary.balancesCreated !== undefined && (
+                            <StatCard
+                                title="Pending Balances"
+                                value={distribution.summary.balancesCreated}
+                                icon={Clock}
+                                color="yellow"
+                            />
+                        )}
                     </div>
 
                     {/* Distribution Info */}
                     <div className="card p-6">
                         <h2 className="text-lg font-semibold text-white mb-4">Distribution Info</h2>
-                        <div className="flex items-center gap-6 text-sm text-zinc-400">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm text-zinc-400">
+                            <div>
+                                <span className="text-zinc-500">Target Date:</span>{' '}
+                                <span className="text-zinc-200">
+                                    {distribution.targetDate || targetDate}
+                                </span>
+                            </div>
                             <div>
                                 <span className="text-zinc-500">Calculated at:</span>{' '}
                                 <span className="text-zinc-200">
@@ -217,10 +342,42 @@ export default function DistributionPage() {
                             </div>
                             <div>
                                 <span className="text-zinc-500">Algorithm:</span>{' '}
-                                <span className="text-zinc-200">Zone-Based Pallet Balancing</span>
+                                <span className="text-zinc-200">Capacity-Constrained Priority Routing</span>
                             </div>
                         </div>
                     </div>
+
+                    {/* Pending Balances Alert */}
+                    {distribution.pendingBalances && distribution.pendingBalances.length > 0 && (
+                        <div className="card p-6 bg-yellow-500/10 border-yellow-500/30">
+                            <div className="flex items-start gap-4">
+                                <Clock className="w-5 h-5 text-yellow-400 flex-shrink-0 mt-1" />
+                                <div className="flex-1">
+                                    <h3 className="text-lg font-semibold text-yellow-400 mb-2">
+                                        {distribution.pendingBalances.length} Pending Balance(s) Created
+                                    </h3>
+                                    <p className="text-zinc-300 text-sm mb-3">
+                                        Some orders exceeded driver capacity and have been scheduled for the next day.
+                                    </p>
+                                    <div className="space-y-2">
+                                        {distribution.pendingBalances.map((balance, idx) => (
+                                            <div key={idx} className="text-sm text-zinc-400">
+                                                • Zone {balance.zone}: {balance.remaining_quantity} pallets
+                                                {balance.do_number && ` (DO: ${balance.do_number})`}
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <Link
+                                        href="/balances"
+                                        className="inline-flex items-center gap-2 text-sm text-blue-400 hover:text-blue-300 mt-4"
+                                    >
+                                        Manage pending balances
+                                        <ArrowRight className="w-4 h-4" />
+                                    </Link>
+                                </div>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Driver Assignments */}
                     <div>
@@ -316,8 +473,13 @@ export default function DistributionPage() {
                     <p className="text-zinc-500 mb-2">
                         {cache.orders.length} orders and {cache.drivers.length} drivers loaded
                     </p>
+                    {balanceCount > 0 && (
+                        <p className="text-sm text-yellow-400 mb-2">
+                            + {balanceCount} pending balance(s) will be included
+                        </p>
+                    )}
                     <p className="text-sm text-zinc-600 mb-6">
-                        Click the button above to calculate zone-based distribution
+                        Click the button above to calculate distribution for {targetDate}
                     </p>
                 </div>
             )}
