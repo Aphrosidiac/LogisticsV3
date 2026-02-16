@@ -4,10 +4,16 @@ export interface Order {
   id: string;
   pallets: number;
   zone: string;
-  date?: string;
+  date: string; // Required for date-based scheduling
+  priority?: 'high' | 'standard';
+  ctn_amount?: number;
+  ctn_to_pallet_ratio?: number;
+  do_number?: string;
+  invoice_number?: string;
   pickup?: string;
   delivery?: string;
   invoice?: string;
+  attachment_urls?: string[];
   rawData: Record<string, string>;
 }
 
@@ -15,6 +21,8 @@ export interface Driver {
   id: string;
   name: string;
   identifier: string;
+  home_region?: string;
+  max_capacity?: number; // Default 11 pallets
 }
 
 export interface ZoneGroup {
@@ -34,13 +42,16 @@ export interface DriverAssignment {
 export interface DistributionResult {
   assignments: DriverAssignment[];
   unassignedDrivers: Driver[];
+  pendingBalances?: PendingBalance[];
   summary: {
     totalOrders: number;
     totalPallets: number;
     totalZones: number;
     assignedDrivers: number;
+    balancesCreated?: number;
   };
   timestamp: string;
+  targetDate?: string;
 }
 
 export interface LogEntry {
@@ -77,8 +88,29 @@ export interface MessageTemplate {
   content: string;
 }
 
+// Pending Balance for partial fulfillments
+export interface PendingBalance {
+  id: string;
+  original_order_id?: string;
+  zone: string;
+  pickup?: string;
+  delivery?: string;
+  do_number?: string;
+  original_quantity: number;
+  fulfilled_quantity: number;
+  remaining_quantity: number;
+  original_date: string;
+  scheduled_for_date: string;
+  status: 'pending' | 'scheduled' | 'fulfilled' | 'cancelled';
+  distribution_id?: string;
+  fulfilled_by_order_id?: string;
+  raw_data?: Record<string, any>;
+  created_at?: string;
+  updated_at?: string;
+}
+
 // Field schema for flexible database configuration
-export type FieldType = 'text' | 'number' | 'date' | 'dropdown' | 'checkbox';
+export type FieldType = 'text' | 'number' | 'date' | 'dropdown' | 'checkbox' | 'file' | 'image';
 
 export interface FieldSchema {
   id: string;

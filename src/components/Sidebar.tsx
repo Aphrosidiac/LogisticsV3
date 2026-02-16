@@ -11,12 +11,14 @@ import {
     Package,
     MessageSquare,
     Database,
+    Clock,
 } from 'lucide-react';
 
 const navItems = [
     { href: '/', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/sheets-manager', label: 'Database Manager', icon: Database },
     { href: '/distribution', label: 'Distribution', icon: Truck },
+    { href: '/balances', label: 'Pending Balances', icon: Clock },
     { href: '/whatsapp', label: 'WhatsApp', icon: MessageSquare },
     { href: '/backup', label: 'Backup & Restore', icon: FileSpreadsheet },
     { href: '/admin', label: 'Admin Settings', icon: Settings },

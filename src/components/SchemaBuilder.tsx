@@ -17,6 +17,8 @@ const FIELD_TYPES: { value: FieldType; label: string }[] = [
     { value: 'date', label: 'Date' },
     { value: 'dropdown', label: 'Dropdown' },
     { value: 'checkbox', label: 'Checkbox' },
+    { value: 'file', label: 'File Upload' },
+    { value: 'image', label: 'Image Upload' },
 ];
 
 // Default required fields
@@ -28,6 +30,24 @@ const DEFAULT_ORDER_FIELDS: FieldSchema[] = [
         type: 'text',
         required: true,
         isCoreField: true,
+    },
+    {
+        id: 'date',
+        name: 'date',
+        label: 'Delivery Date',
+        type: 'date',
+        required: true,
+        isCoreField: true,
+    },
+    {
+        id: 'priority',
+        name: 'priority',
+        label: 'Priority',
+        type: 'dropdown',
+        required: false,
+        isCoreField: false,
+        options: ['high', 'standard'],
+        defaultValue: 'standard',
     },
 ];
 
@@ -47,6 +67,23 @@ const DEFAULT_DRIVER_FIELDS: FieldSchema[] = [
         type: 'text',
         required: true,
         isCoreField: true,
+    },
+    {
+        id: 'home_region',
+        name: 'home_region',
+        label: 'Home Region',
+        type: 'text',
+        required: false,
+        isCoreField: false,
+    },
+    {
+        id: 'max_capacity',
+        name: 'max_capacity',
+        label: 'Max Capacity (Pallets)',
+        type: 'number',
+        required: false,
+        isCoreField: false,
+        defaultValue: 11,
     },
 ];
 

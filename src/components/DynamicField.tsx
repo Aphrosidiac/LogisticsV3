@@ -77,6 +77,34 @@ export default function DynamicField({ field, value, onChange, disabled }: Dynam
                 />
             );
 
+        case 'file':
+        case 'image': {
+            // Display uploaded files as links
+            if (Array.isArray(value) && value.length > 0) {
+                return (
+                    <div className="space-y-1">
+                        {value.map((url: string, index: number) => {
+                            const fileName = url.split('/').pop() || `file-${index + 1}`;
+                            return (
+                                <a
+                                    key={index}
+                                    href={url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="block text-sm text-blue-400 hover:text-blue-300 underline truncate"
+                                >
+                                    {fileName}
+                                </a>
+                            );
+                        })}
+                    </div>
+                );
+            }
+            return (
+                <span className="text-xs text-zinc-500">No files uploaded</span>
+            );
+        }
+
         default:
             return (
                 <input
