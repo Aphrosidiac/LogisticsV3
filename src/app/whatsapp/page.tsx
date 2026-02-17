@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { MessageSquare, QrCode, Send, CheckCircle, XCircle, Loader, AlertTriangle } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
-import * as db from '@/lib/db';
+import * as db from '@/lib/db-supabase';
 import Image from 'next/image';
 
 export default function WhatsAppPage() {

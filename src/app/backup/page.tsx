@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Download, Upload, AlertTriangle, CheckCircle, Database } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
-import * as db from '@/lib/db';
+import * as db from '@/lib/db-supabase';
 
 export default function BackupPage() {
     const { addLog } = useApp();

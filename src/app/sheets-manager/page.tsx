@@ -17,7 +17,7 @@ import {
     MinusCircle
 } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
-import * as db from '@/lib/db';
+import * as db from '@/lib/db-supabase';
 import * as csv from '@/lib/csv';
 import type { Sheet, TableSchema } from '@/types';
 import SchemaBuilder from '@/components/SchemaBuilder';

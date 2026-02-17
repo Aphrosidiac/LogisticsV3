@@ -1,7 +1,7 @@
 'use client';
 
 import { useApp } from '@/context/AppContext';
-import * as db from '@/lib/db';
+import * as db from '@/lib/db-supabase';
 import {
     ScrollText,
     Trash2,
