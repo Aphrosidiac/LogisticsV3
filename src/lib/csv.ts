@@ -70,7 +70,7 @@ export function csvToOrders(data: Record<string, any>[]): Order[] {
             id: generateId(),
             pallets: Number(row[palletKey]) || 1,
             zone: zone.toUpperCase(),
-            date: dateKey ? String(row[dateKey] || '') : undefined,
+            date: dateKey ? String(row[dateKey] || '') : new Date().toISOString().split('T')[0],
             pickup: pickupKey ? String(row[pickupKey] || '') : undefined,
             delivery: deliveryKey ? String(row[deliveryKey] || '') : undefined,
             invoice: invoiceKey ? String(row[invoiceKey] || '') : undefined,

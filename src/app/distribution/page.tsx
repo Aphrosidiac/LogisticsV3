@@ -319,7 +319,7 @@ export default function DistributionPage() {
                                 title="Pending Balances"
                                 value={distribution.summary.balancesCreated}
                                 icon={Clock}
-                                color="yellow"
+                                color="orange"
                             />
                         )}
                     </div>

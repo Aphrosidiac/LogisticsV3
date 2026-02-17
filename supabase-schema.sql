@@ -1,43 +1,7 @@
-import { createClient } from '@supabase/supabase-js';
+-- LogisticsV3 Supabase Database Schema
+-- Copy and paste this entire file into the Supabase SQL Editor
+-- Location: https://app.supabase.com/project/YOUR_PROJECT/sql/new
 
-// Supabase configuration
-// Use placeholder values during build time if env vars are not set
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBsYWNlaG9sZGVyIiwicm9sZSI6ImFub24iLCJpYXQiOjE2NDUxOTI4MDAsImV4cCI6MTk2MDc2ODgwMH0.placeholder';
-
-if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-  console.warn('Supabase environment variables not configured. Please set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY');
-}
-
-// Create Supabase client
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-  },
-  db: {
-    schema: 'public'
-  }
-});
-
-// Storage bucket name for order attachments
-export const ORDER_ATTACHMENTS_BUCKET = 'order-attachments';
-
-// Database table names
-export const TABLES = {
-  ORDERS: 'orders',
-  DRIVERS: 'drivers',
-  SHEETS: 'sheets',
-  DISTRIBUTIONS: 'distributions',
-  PENDING_BALANCES: 'pending_balances',
-  SCHEMAS: 'schemas',
-  APP_CONFIG: 'app_config',
-  LOGS: 'logs',
-  WHATSAPP_MESSAGES: 'whatsapp_messages',
-} as const;
-
-// SQL Schema for Supabase tables
-export const SUPABASE_SCHEMA_SQL = `
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
@@ -204,6 +168,3 @@ CREATE TRIGGER update_pending_balances_updated_at BEFORE UPDATE ON pending_balan
 CREATE TRIGGER update_schemas_updated_at BEFORE UPDATE ON schemas FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_app_config_updated_at BEFORE UPDATE ON app_config FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_whatsapp_messages_updated_at BEFORE UPDATE ON whatsapp_messages FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-`;
-
-export default supabase;
