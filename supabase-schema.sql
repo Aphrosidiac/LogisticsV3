@@ -151,6 +151,52 @@ CREATE TABLE IF NOT EXISTS whatsapp_messages (
 CREATE INDEX IF NOT EXISTS idx_whatsapp_messages_status ON whatsapp_messages(status);
 CREATE INDEX IF NOT EXISTS idx_whatsapp_messages_distribution_id ON whatsapp_messages(distribution_id);
 
+-- Zones table
+CREATE TABLE IF NOT EXISTS zones (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name TEXT NOT NULL UNIQUE,
+  description TEXT,
+  is_active BOOLEAN DEFAULT true,
+  display_order INTEGER DEFAULT 0,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_zones_name ON zones(name);
+CREATE INDEX IF NOT EXISTS idx_zones_is_active ON zones(is_active);
+CREATE INDEX IF NOT EXISTS idx_zones_display_order ON zones(display_order);
+
+-- Districts table
+CREATE TABLE IF NOT EXISTS districts (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  zone_id UUID NOT NULL REFERENCES zones(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  description TEXT,
+  is_active BOOLEAN DEFAULT true,
+  display_order INTEGER DEFAULT 0,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE(zone_id, name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_districts_zone_id ON districts(zone_id);
+CREATE INDEX IF NOT EXISTS idx_districts_name ON districts(name);
+CREATE INDEX IF NOT EXISTS idx_districts_is_active ON districts(is_active);
+
+-- Add zone_id and district_id to orders table
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS zone_id UUID REFERENCES zones(id) ON DELETE SET NULL;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS district_id UUID REFERENCES districts(id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS idx_orders_zone_id ON orders(zone_id);
+CREATE INDEX IF NOT EXISTS idx_orders_district_id ON orders(district_id);
+
+-- Add zone_id and district_id to pending_balances table
+ALTER TABLE pending_balances ADD COLUMN IF NOT EXISTS zone_id UUID REFERENCES zones(id);
+ALTER TABLE pending_balances ADD COLUMN IF NOT EXISTS district_id UUID REFERENCES districts(id);
+
+CREATE INDEX IF NOT EXISTS idx_pending_balances_zone_id ON pending_balances(zone_id);
+CREATE INDEX IF NOT EXISTS idx_pending_balances_district_id ON pending_balances(district_id);
+
 -- Updated timestamp trigger function
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
@@ -160,6 +206,17 @@ BEGIN
 END;
 $$ language 'plpgsql';
 
+-- ============================================================================
+-- MIGRATIONS (run these if upgrading from an earlier schema)
+-- ============================================================================
+
+-- Add phone number to drivers (used by WhatsApp auto-dispatch)
+ALTER TABLE drivers ADD COLUMN IF NOT EXISTS phone TEXT;
+
+-- Add operational status to orders
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'pending'
+  CHECK (status IN ('pending', 'assigned', 'in_progress', 'completed', 'cancelled'));
+
 -- Apply updated_at triggers to all tables
 CREATE TRIGGER update_orders_updated_at BEFORE UPDATE ON orders FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_drivers_updated_at BEFORE UPDATE ON drivers FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
@@ -168,3 +225,5 @@ CREATE TRIGGER update_pending_balances_updated_at BEFORE UPDATE ON pending_balan
 CREATE TRIGGER update_schemas_updated_at BEFORE UPDATE ON schemas FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_app_config_updated_at BEFORE UPDATE ON app_config FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_whatsapp_messages_updated_at BEFORE UPDATE ON whatsapp_messages FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_zones_updated_at BEFORE UPDATE ON zones FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_districts_updated_at BEFORE UPDATE ON districts FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();

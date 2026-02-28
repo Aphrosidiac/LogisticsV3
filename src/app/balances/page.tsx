@@ -1,16 +1,15 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import {
   Calendar,
   Package,
   MapPin,
   Truck,
-  AlertCircle,
   X,
   Clock,
   CheckCircle,
+  RefreshCw,
 } from 'lucide-react';
 import {
   getAllPendingBalances,
@@ -21,8 +20,15 @@ import {
 import type { PendingBalance } from '@/types';
 import Modal from '@/components/Modal';
 
+function formatDate(dateStr: string): string {
+  if (!dateStr) return dateStr;
+  // Convert YYYY-MM-DD to DD/MM/YYYY
+  const parts = dateStr.split('-');
+  if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  return dateStr;
+}
+
 export default function BalancesPage() {
-  const router = useRouter();
   const [balances, setBalances] = useState<PendingBalance[]>([]);
   const [statistics, setStatistics] = useState<
     Array<{ date: string; count: number; totalQuantity: number; zones: string[] }>
@@ -31,6 +37,14 @@ export default function BalancesPage() {
   const [selectedBalance, setSelectedBalance] = useState<PendingBalance | null>(null);
   const [showRescheduleModal, setShowRescheduleModal] = useState(false);
   const [newScheduledDate, setNewScheduledDate] = useState('');
+  const [confirmCancelId, setConfirmCancelId] = useState<string | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  function showToast(type: 'success' | 'error', message: string) {
+    setToast({ type, message });
+    setTimeout(() => setToast(null), 3000);
+  }
 
   useEffect(() => {
     loadBalances();
@@ -53,35 +67,39 @@ export default function BalancesPage() {
   };
 
   const handleCancelBalance = async (balanceId: string) => {
-    if (!confirm('Are you sure you want to cancel this balance?')) return;
-
+    setActionLoading(true);
     const result = await cancelBalance(balanceId);
+    setActionLoading(false);
+    setConfirmCancelId(null);
     if (result.success) {
-      alert('Balance cancelled successfully');
+      showToast('success', 'Balance cancelled');
       loadBalances();
     } else {
-      alert(`Error: ${result.error}`);
+      showToast('error', result.error || 'Failed to cancel balance');
     }
   };
 
   const handleReschedule = async () => {
     if (!selectedBalance || !newScheduledDate) return;
-
+    setActionLoading(true);
     const result = await rescheduleBalance(selectedBalance.id, newScheduledDate);
+    setActionLoading(false);
     if (result.success) {
-      alert('Balance rescheduled successfully');
+      // Remove balance immediately from local state — it's now cancelled
+      setBalances(prev => prev.filter(b => b.id !== selectedBalance.id));
+      showToast('success', 'Balance rescheduled — order returned to distribution');
       setShowRescheduleModal(false);
       setSelectedBalance(null);
       setNewScheduledDate('');
       loadBalances();
     } else {
-      alert(`Error: ${result.error}`);
+      showToast('error', result.error || 'Failed to reschedule balance');
     }
   };
 
   const openRescheduleModal = (balance: PendingBalance) => {
     setSelectedBalance(balance);
-    setNewScheduledDate(balance.scheduled_for_date);
+    setNewScheduledDate('');
     setShowRescheduleModal(true);
   };
 
@@ -112,14 +130,35 @@ export default function BalancesPage() {
 
   return (
     <div className="space-y-8 animate-fadeIn">
+      {/* Toast */}
+      {toast && (
+        <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-lg text-sm font-medium shadow-lg transition-all ${
+          toast.type === 'success'
+            ? 'bg-emerald-500/20 border border-emerald-500/40 text-emerald-300'
+            : 'bg-red-500/20 border border-red-500/40 text-red-300'
+        }`}>
+          {toast.message}
+        </div>
+      )}
+
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-white mb-2">
-          Pending Balances
-        </h1>
-        <p className="text-zinc-500">
-          Track partial fulfillments and schedule next-day deliveries
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-white mb-2">
+            Pending Balances
+          </h1>
+          <p className="text-zinc-500">
+            Track partial fulfillments and schedule next-day deliveries
+          </p>
+        </div>
+        <button
+          onClick={loadBalances}
+          disabled={loading}
+          className="flex items-center gap-2 px-3 py-2 text-sm bg-zinc-800 border border-zinc-700 rounded-lg text-zinc-300 hover:bg-zinc-700 transition-colors"
+        >
+          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          Refresh
+        </button>
       </div>
 
       {/* Statistics Cards */}
@@ -178,7 +217,7 @@ export default function BalancesPage() {
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
                     <Calendar className="w-4 h-4 text-zinc-400" />
-                    <span className="font-medium text-white">{stat.date}</span>
+                    <span className="font-medium text-white">{formatDate(stat.date)}</span>
                   </div>
                   <p className="text-sm text-zinc-400 mt-1">
                     Zones: {stat.zones.join(', ')}
@@ -224,7 +263,7 @@ export default function BalancesPage() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Calendar className="w-5 h-5 text-emerald-400" />
-                      <h3 className="text-lg font-semibold text-white">{date}</h3>
+                      <h3 className="text-lg font-semibold text-white">{formatDate(date)}</h3>
                     </div>
                     <span className="text-sm text-zinc-400">
                       {dateBalances.length} balance{dateBalances.length > 1 ? 's' : ''}
@@ -261,7 +300,7 @@ export default function BalancesPage() {
 
                             <div>
                               <p className="text-zinc-500">Original Date</p>
-                              <p className="font-medium text-zinc-200">{balance.original_date}</p>
+                              <p className="font-medium text-zinc-200">{formatDate(balance.original_date)}</p>
                             </div>
 
                             {balance.pickup && (
@@ -293,19 +332,38 @@ export default function BalancesPage() {
                           </div>
                         </div>
 
-                        <div className="flex gap-2 ml-4">
+                        <div className="flex gap-2 ml-4 flex-shrink-0">
                           <button
                             onClick={() => openRescheduleModal(balance)}
                             className="btn-primary text-sm"
                           >
                             Reschedule
                           </button>
-                          <button
-                            onClick={() => handleCancelBalance(balance.id)}
-                            className="btn-danger text-sm"
-                          >
-                            Cancel
-                          </button>
+                          {confirmCancelId === balance.id ? (
+                            <div className="flex items-center gap-1">
+                              <span className="text-xs text-zinc-400 mr-1">Confirm?</span>
+                              <button
+                                onClick={() => handleCancelBalance(balance.id)}
+                                disabled={actionLoading}
+                                className="px-2 py-1 text-xs bg-red-500/20 text-red-400 border border-red-500/30 rounded hover:bg-red-500/30 transition-colors"
+                              >
+                                Yes
+                              </button>
+                              <button
+                                onClick={() => setConfirmCancelId(null)}
+                                className="px-2 py-1 text-xs bg-zinc-700 text-zinc-300 rounded hover:bg-zinc-600 transition-colors"
+                              >
+                                No
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => setConfirmCancelId(balance.id)}
+                              className="btn-danger text-sm"
+                            >
+                              Cancel
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -329,10 +387,13 @@ export default function BalancesPage() {
           <div className="space-y-4">
             <div>
               <p className="text-sm text-zinc-400 mb-2">Balance Details</p>
-              <div className="bg-zinc-800/50 p-4 rounded-lg border border-zinc-700">
+              <div className="bg-zinc-800/50 p-4 rounded-lg border border-zinc-700 space-y-1">
                 <p className="font-medium text-white">Zone {selectedBalance.zone}</p>
                 <p className="text-sm text-zinc-400">
                   {selectedBalance.remaining_quantity} pallets
+                </p>
+                <p className="text-sm text-zinc-500">
+                  Currently scheduled: <span className="text-zinc-300">{formatDate(selectedBalance.scheduled_for_date)}</span>
                 </p>
               </div>
             </div>
@@ -347,6 +408,9 @@ export default function BalancesPage() {
                 onChange={(e) => setNewScheduledDate(e.target.value)}
                 className="input w-full"
               />
+              {newScheduledDate && newScheduledDate === selectedBalance.scheduled_for_date && (
+                <p className="text-xs text-amber-400 mt-1.5">Date is the same as current — pick a different date to reschedule.</p>
+              )}
             </div>
 
             <div className="flex gap-3 justify-end">
@@ -361,9 +425,10 @@ export default function BalancesPage() {
               </button>
               <button
                 onClick={handleReschedule}
-                className="btn-primary"
+                disabled={actionLoading || !newScheduledDate}
+                className="btn-primary disabled:opacity-50"
               >
-                Reschedule
+                {actionLoading ? 'Saving...' : 'Reschedule'}
               </button>
             </div>
           </div>

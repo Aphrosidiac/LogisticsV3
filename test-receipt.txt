@@ -1,0 +1,5 @@
+This is a test receipt file for the logistics system.
+Order: DO-2024-002
+Date: 2026-02-18
+Amount: $150.00
+Status: Paid

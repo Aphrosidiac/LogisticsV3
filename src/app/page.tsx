@@ -37,6 +37,11 @@ export default function Dashboard() {
   const hasDistribution = cache.lastDistribution !== null;
   const hasAdmins = config.adminNumbers.length > 0;
 
+  const today = new Date().toISOString().split('T')[0];
+  const overdueOrders = cache.orders.filter(
+    (o) => (!o.status || o.status === 'pending') && o.date < today
+  );
+
   return (
     <div className="space-y-8 animate-fadeIn">
       {/* Header */}
@@ -46,6 +51,27 @@ export default function Dashboard() {
           Overview of your logistics distribution system
         </p>
       </div>
+
+      {/* Overdue Pending Orders Warning */}
+      {overdueOrders.length > 0 && (
+        <div className="flex items-center gap-3 bg-amber-500/10 border border-amber-500/30 rounded-xl px-4 py-3">
+          <AlertCircle className="w-5 h-5 text-amber-400 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <span className="text-sm font-medium text-amber-300">
+              {overdueOrders.length} overdue pending order{overdueOrders.length !== 1 ? 's' : ''}
+            </span>
+            <span className="text-sm text-amber-200/70 ml-2">
+              — from past dates, not yet distributed
+            </span>
+          </div>
+          <Link
+            href="/distribution"
+            className="text-xs text-amber-400 hover:text-amber-300 underline whitespace-nowrap shrink-0"
+          >
+            Distribute now →
+          </Link>
+        </div>
+      )}
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

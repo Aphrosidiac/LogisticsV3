@@ -342,7 +342,7 @@ export function formatDistributionMessage(result: DistributionResult): string {
   lines.push('');
 
   // Driver assignments
-  for (const assignment of result.assignments) {
+  for (const assignment of result.assignments || []) {
     const capacity = assignment.driver.max_capacity || 11;
     const utilization = ((assignment.totalPallets / capacity) * 100).toFixed(0);
 
@@ -350,7 +350,7 @@ export function formatDistributionMessage(result: DistributionResult): string {
     if (assignment.driver.home_region) {
       lines.push(`   Region: ${assignment.driver.home_region}`);
     }
-    lines.push(`   Zones: ${assignment.zones.join(', ')}`);
+    lines.push(`   Zones: ${(assignment.zones || []).join(', ')}`);
     lines.push(`   ${assignment.totalOrders} orders | ${assignment.totalPallets}/${capacity} pallets (${utilization}%)`);
     lines.push('');
 
@@ -382,9 +382,9 @@ export function formatDistributionMessage(result: DistributionResult): string {
   }
 
   // Unassigned drivers
-  if (result.unassignedDrivers.length > 0) {
+  if ((result.unassignedDrivers || []).length > 0) {
     lines.push('*Unassigned Drivers:*');
-    for (const driver of result.unassignedDrivers) {
+    for (const driver of result.unassignedDrivers || []) {
       lines.push(`   - ${driver.name}`);
     }
     lines.push('');
@@ -413,6 +413,45 @@ export function formatDistributionMessage(result: DistributionResult): string {
     lines.push(`   - Pending Balances: ${result.summary.balancesCreated}`);
   }
   lines.push('================================');
+
+  return lines.join('\n');
+}
+
+/**
+ * Format a message for a single driver's assignment (for individual WhatsApp dispatch)
+ */
+export function formatDriverAssignmentMessage(assignment: DriverAssignment): string {
+  const lines: string[] = [];
+
+  lines.push(`*Assignment for ${assignment.driver.name}*`);
+  if (assignment.driver.identifier) {
+    lines.push(`Vehicle: ${assignment.driver.identifier}`);
+  }
+  lines.push(`Zones: ${(assignment.zones || []).join(', ')}`);
+  lines.push(`${assignment.totalOrders} order${assignment.totalOrders !== 1 ? 's' : ''} | ${assignment.totalPallets} pallet${assignment.totalPallets !== 1 ? 's' : ''}`);
+  lines.push('');
+
+  // Group orders by zone
+  const ordersByZone = new Map<string, typeof assignment.orders>();
+  for (const order of assignment.orders) {
+    if (!ordersByZone.has(order.zone)) ordersByZone.set(order.zone, []);
+    ordersByZone.get(order.zone)!.push(order);
+  }
+
+  for (const [zone, orders] of ordersByZone) {
+    lines.push(`Zone ${zone}:`);
+    for (const order of orders) {
+      const route = order.pickup && order.delivery
+        ? `${order.pickup} → ${order.delivery}`
+        : order.delivery || order.pickup || 'N/A';
+      const doText = order.do_number ? ` [DO: ${order.do_number}]` : '';
+      const priorityText = order.priority === 'high' ? ' ⚠️ HIGH PRIORITY' : '';
+      lines.push(`  • ${route} (${order.pallets} pallet${order.pallets > 1 ? 's' : ''})${doText}${priorityText}`);
+    }
+  }
+
+  lines.push('');
+  lines.push('_Please confirm receipt of this assignment._');
 
   return lines.join('\n');
 }

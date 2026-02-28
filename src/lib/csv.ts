@@ -81,6 +81,49 @@ export function csvToOrders(data: Record<string, any>[]): Order[] {
     return orders;
 }
 
+// New function to convert sheet data (with schema field names) to orders
+export function sheetDataToOrders(data: Record<string, any>[]): Order[] {
+    const orders: Order[] = [];
+
+    for (const row of data) {
+        // Skip empty rows
+        if (!row || Object.values(row).every(val => !val || val === '' || val === '-')) {
+            continue;
+        }
+
+        // Extract zone - handle both "Zone" and zone with district format
+        let zone = String(row['Zone'] || row['ZONE'] || '').trim();
+        if (zone.includes('→')) {
+            // Extract just the zone part from "Zone → District" format
+            zone = zone.split('→')[0].trim();
+        }
+        
+        if (!zone || zone === '' || zone === '-') continue;
+
+        // Extract other fields using exact schema field names
+        const pallets = Number(row['Quantity'] || row['QUANTITY'] || row['Pallets'] || row['PALLETS'] || 1);
+        const date = String(row['Delivery Date'] || row['DELIVERY DATE'] || row['Date'] || row['DATE'] || new Date().toISOString().split('T')[0]);
+        const priority = String(row['Priority'] || row['PRIORITY'] || 'standard').toLowerCase();
+        const pickup = String(row['Pickup'] || row['PICKUP'] || '');
+        const delivery = String(row['Delivery'] || row['DELIVERY'] || '');
+        const invoice = String(row['Invoice'] || row['INVOICE'] || row['Invoice Number'] || row['INVOICE NUMBER'] || '');
+
+        orders.push({
+            id: generateId(),
+            pallets,
+            zone: zone.toUpperCase(),
+            date,
+            priority: priority as 'high' | 'standard',
+            pickup: pickup || undefined,
+            delivery: delivery || undefined,
+            invoice: invoice || undefined,
+            rawData: row,
+        });
+    }
+
+    return orders;
+}
+
 export function csvToDrivers(data: Record<string, any>[]): Driver[] {
     const drivers: Driver[] = [];
 
@@ -103,6 +146,36 @@ export function csvToDrivers(data: Record<string, any>[]): Driver[] {
             id: generateId(),
             name,
             identifier: idKey ? String(row[idKey] || name) : name,
+        });
+    }
+
+    return drivers;
+}
+
+// New function to convert sheet data (with schema field names) to drivers
+export function sheetDataToDrivers(data: Record<string, any>[]): Driver[] {
+    const drivers: Driver[] = [];
+
+    for (const row of data) {
+        // Skip empty rows
+        if (!row || Object.values(row).every(val => !val || val === '' || val === '-')) {
+            continue;
+        }
+
+        // Extract fields using exact schema field names
+        const name = String(row['Driver Name'] || row['DRIVER NAME'] || row['Name'] || row['NAME'] || '').trim();
+        const identifier = String(row['Identifier'] || row['IDENTIFIER'] || name);
+        const homeRegion = String(row['Home Region'] || row['HOME REGION'] || '');
+        const maxCapacity = Number(row['Max Capacity (Pallets)'] || row['MAX CAPACITY (PALLETS)'] || row['Max Capacity'] || row['MAX CAPACITY'] || 11);
+
+        if (!name || name === '' || name === '-') continue;
+
+        drivers.push({
+            id: generateId(),
+            name,
+            identifier,
+            home_region: homeRegion || undefined,
+            max_capacity: maxCapacity,
         });
     }
 

@@ -27,6 +27,8 @@ export const ORDER_ATTACHMENTS_BUCKET = 'order-attachments';
 export const TABLES = {
   ORDERS: 'orders',
   DRIVERS: 'drivers',
+  ZONES: 'zones',
+  DISTRICTS: 'districts',
   SHEETS: 'sheets',
   DISTRIBUTIONS: 'distributions',
   PENDING_BALANCES: 'pending_balances',
@@ -34,6 +36,7 @@ export const TABLES = {
   APP_CONFIG: 'app_config',
   LOGS: 'logs',
   WHATSAPP_MESSAGES: 'whatsapp_messages',
+  RECEIPTS: 'receipts',
 } as const;
 
 // SQL Schema for Supabase tables
@@ -73,10 +76,14 @@ CREATE TABLE IF NOT EXISTS drivers (
   identifier TEXT NOT NULL,
   home_region TEXT,
   max_capacity NUMERIC DEFAULT 11,
+  is_active BOOLEAN NOT NULL DEFAULT true,
   raw_data JSONB NOT NULL DEFAULT '{}'::jsonb,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Migration: add is_active to existing drivers tables
+ALTER TABLE drivers ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT true;
 
 CREATE INDEX IF NOT EXISTS idx_drivers_home_region ON drivers(home_region);
 CREATE INDEX IF NOT EXISTS idx_drivers_name ON drivers(name);
@@ -187,6 +194,23 @@ CREATE TABLE IF NOT EXISTS whatsapp_messages (
 CREATE INDEX IF NOT EXISTS idx_whatsapp_messages_status ON whatsapp_messages(status);
 CREATE INDEX IF NOT EXISTS idx_whatsapp_messages_distribution_id ON whatsapp_messages(distribution_id);
 
+-- Receipts table
+CREATE TABLE IF NOT EXISTS receipts (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  sheet_id UUID NOT NULL,
+  row_index INTEGER NOT NULL,
+  file_name TEXT NOT NULL,
+  file_type TEXT NOT NULL,
+  file_size INTEGER NOT NULL,
+  file_url TEXT NOT NULL,
+  uploaded_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_receipts_sheet_id ON receipts(sheet_id);
+CREATE INDEX IF NOT EXISTS idx_receipts_row_index ON receipts(row_index);
+
 -- Updated timestamp trigger function
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
@@ -204,6 +228,7 @@ CREATE TRIGGER update_pending_balances_updated_at BEFORE UPDATE ON pending_balan
 CREATE TRIGGER update_schemas_updated_at BEFORE UPDATE ON schemas FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_app_config_updated_at BEFORE UPDATE ON app_config FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_whatsapp_messages_updated_at BEFORE UPDATE ON whatsapp_messages FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_receipts_updated_at BEFORE UPDATE ON receipts FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 `;
 
 export default supabase;

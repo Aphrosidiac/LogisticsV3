@@ -28,6 +28,8 @@ export async function createPendingBalance(
       id: crypto.randomUUID(),
       original_order_id: orderId,
       zone: order.zone,
+      zone_id: order.zone_id,
+      district_id: order.district_id,
       pickup: order.pickup,
       delivery: order.delivery,
       do_number: order.do_number,
@@ -115,6 +117,8 @@ export async function convertBalancesToOrders(
   return balances.map((balance) => ({
     id: crypto.randomUUID(),
     zone: balance.zone,
+    zone_id: balance.zone_id,
+    district_id: balance.district_id,
     date: balance.scheduled_for_date,
     priority: 'high', // Balances get high priority
     pallets: balance.remaining_quantity,
@@ -205,23 +209,63 @@ export async function cancelBalance(
 }
 
 /**
- * Reschedule a pending balance to a new date
+ * Reschedule a pending balance to a new date.
+ * Cancels the balance and creates a new order for the remaining quantity
+ * on the new date so it gets picked up by distribution for that day.
+ * The original order is left untouched (it was already partially fulfilled).
  */
 export async function rescheduleBalance(
   balanceId: string,
   newDate: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const { error } = await supabase
+    // 1. Fetch the full balance record
+    const { data: balance, error: fetchError } = await supabase
       .from(TABLES.PENDING_BALANCES)
-      .update({
-        scheduled_for_date: newDate,
-        status: 'pending', // Reset to pending
-      })
+      .select('*')
+      .eq('id', balanceId)
+      .single();
+
+    if (fetchError || !balance) {
+      return { success: false, error: fetchError?.message || 'Balance not found' };
+    }
+
+    // 2. Cancel the pending balance so it disappears from the list
+    const { error: cancelError } = await supabase
+      .from(TABLES.PENDING_BALANCES)
+      .update({ status: 'cancelled' })
       .eq('id', balanceId);
 
-    if (error) {
-      return { success: false, error: error.message };
+    if (cancelError) {
+      return { success: false, error: cancelError.message };
+    }
+
+    // 3. Create a new order for the remaining quantity on the new date
+    //    so it appears in distribution for that day
+    const newOrder = {
+      zone: balance.zone,
+      zone_id: balance.zone_id || null,
+      district_id: balance.district_id || null,
+      date: newDate,
+      pallets: balance.remaining_quantity,
+      pickup: balance.pickup || null,
+      delivery: balance.delivery || null,
+      do_number: balance.do_number || null,
+      priority: 'high', // Rescheduled balances get high priority
+      status: 'pending',
+      raw_data: {
+        ...(balance.raw_data || {}),
+        _rescheduled_from_balance: balanceId,
+        _original_order_id: balance.original_order_id || '',
+      },
+    };
+
+    const { error: orderError } = await supabase
+      .from(TABLES.ORDERS)
+      .insert(newOrder);
+
+    if (orderError) {
+      return { success: false, error: orderError.message };
     }
 
     return { success: true };

@@ -1,9 +1,36 @@
 // Core data types for Logistics Distribution System
 
+export interface Zone {
+  id: string;
+  name: string;
+  description?: string;
+  is_active: boolean;
+  display_order: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface District {
+  id: string;
+  zone_id: string;
+  name: string;
+  description?: string;
+  is_active: boolean;
+  display_order: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ZoneWithDistricts extends Zone {
+  districts: District[];
+}
+
 export interface Order {
   id: string;
   pallets: number;
-  zone: string;
+  zone: string;        // Keep for backward compatibility
+  zone_id?: string;    // New foreign key
+  district_id?: string; // New foreign key
   date: string; // Required for date-based scheduling
   priority?: 'high' | 'standard';
   ctn_amount?: number;
@@ -14,6 +41,10 @@ export interface Order {
   delivery?: string;
   invoice?: string;
   attachment_urls?: string[];
+  status?: 'pending' | 'assigned' | 'in_progress' | 'completed' | 'cancelled';
+  completed_date?: string;
+  assigned_driver_id?: string;
+  assigned_date?: string;
   rawData: Record<string, string>;
 }
 
@@ -23,6 +54,8 @@ export interface Driver {
   identifier: string;
   home_region?: string;
   max_capacity?: number; // Default 11 pallets
+  phone?: string;        // WhatsApp phone number for driver dispatch
+  is_active?: boolean;   // When false, driver is excluded from distribution
 }
 
 export interface ZoneGroup {
@@ -93,6 +126,8 @@ export interface PendingBalance {
   id: string;
   original_order_id?: string;
   zone: string;
+  zone_id?: string;
+  district_id?: string;
   pickup?: string;
   delivery?: string;
   do_number?: string;
@@ -146,11 +181,14 @@ export interface AppConfig {
     orders?: TableSchema;
     drivers?: TableSchema;
   };
+  distributionTime?: string;           // "HH:MM" e.g. "20:00"
+  lastAutoDistributionDate?: string;   // YYYY-MM-DD
 }
 
 export interface AppCache {
   orders: Order[];
   drivers: Driver[];
+  zones: ZoneWithDistricts[];
   lastDistribution: DistributionResult | null;
   lastFetch: string | null;
 }

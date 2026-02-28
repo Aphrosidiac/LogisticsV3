@@ -1,6 +1,7 @@
 // Supabase database wrapper - mirrors API of db.ts for easy migration
 import { supabase, TABLES } from './supabase';
 import type { Order, Driver, AppConfig, LogEntry, DistributionResult, MessageTemplate, Sheet } from '@/types';
+import { getZone, getDistrict } from './db-zones';
 
 // ============================================================================
 // Config Operations
@@ -44,6 +45,8 @@ export async function getConfig(): Promise<AppConfig> {
       messageTemplates: data.message_templates || [],
       passwordHash: data.password_hash,
       schemas: data.schemas || {},
+      distributionTime: data.distribution_time || '20:00',
+      lastAutoDistributionDate: data.last_auto_distribution_date || undefined,
     };
   } catch (error) {
     console.error('Error getting config:', error);
@@ -74,6 +77,8 @@ export async function saveConfig(config: Partial<AppConfig>) {
           message_templates: updated.messageTemplates,
           password_hash: updated.passwordHash,
           schemas: updated.schemas,
+          distribution_time: updated.distributionTime || '20:00',
+          last_auto_distribution_date: updated.lastAutoDistributionDate || null,
         })
         .eq('id', existing.id);
 
@@ -89,6 +94,8 @@ export async function saveConfig(config: Partial<AppConfig>) {
           message_templates: updated.messageTemplates,
           password_hash: updated.passwordHash,
           schemas: updated.schemas,
+          distribution_time: updated.distributionTime || '20:00',
+          last_auto_distribution_date: updated.lastAutoDistributionDate || null,
         });
 
       if (error) throw error;
@@ -247,22 +254,42 @@ export async function deleteSheet(id: string) {
 
 export async function saveOrders(orders: Order[], sheetId?: string) {
   try {
-    const ordersToInsert = orders.map((order) => ({
-      id: order.id || crypto.randomUUID(),
-      sheet_id: sheetId,
-      zone: order.zone,
-      date: order.date || new Date().toISOString().split('T')[0],
-      priority: order.priority || 'standard',
-      ctn_amount: order.ctn_amount,
-      ctn_to_pallet_ratio: order.ctn_to_pallet_ratio,
-      pallets: order.pallets,
-      do_number: order.do_number,
-      invoice_number: order.invoice_number || order.invoice,
-      pickup: order.pickup,
-      delivery: order.delivery,
-      attachment_urls: order.attachment_urls || [],
-      raw_data: order.rawData || {},
-    }));
+    // Process orders to populate legacy zone text if zone_id and district_id are provided
+    const ordersToInsert = await Promise.all(
+      orders.map(async (order) => {
+        let zoneText = order.zone;
+
+        // If zone_id and district_id are provided, populate legacy zone text
+        if (order.zone_id && order.district_id) {
+          const [zone, district] = await Promise.all([
+            getZone(order.zone_id),
+            getDistrict(order.district_id),
+          ]);
+          if (zone && district) {
+            zoneText = `${zone.name} - ${district.name}`;
+          }
+        }
+
+        return {
+          id: order.id || crypto.randomUUID(),
+          sheet_id: sheetId,
+          zone: zoneText,
+          zone_id: order.zone_id,
+          district_id: order.district_id,
+          date: order.date || new Date().toISOString().split('T')[0],
+          priority: order.priority || 'standard',
+          ctn_amount: order.ctn_amount,
+          ctn_to_pallet_ratio: order.ctn_to_pallet_ratio,
+          pallets: order.pallets,
+          do_number: order.do_number,
+          invoice_number: order.invoice_number || order.invoice,
+          pickup: order.pickup,
+          delivery: order.delivery,
+          attachment_urls: order.attachment_urls || [],
+          raw_data: order.rawData || {},
+        };
+      })
+    );
 
     const { error } = await supabase
       .from(TABLES.ORDERS)
@@ -287,8 +314,11 @@ export async function getAllOrders(): Promise<Order[]> {
     return (data || []).map((row) => ({
       id: row.id,
       zone: row.zone,
+      zone_id: row.zone_id,
+      district_id: row.district_id,
       date: row.date,
-      priority: row.priority as 'high' | 'standard',
+      priority: (row.priority as 'high' | 'standard') || 'standard',
+      status: (row.status as Order['status']) || 'pending',
       ctn_amount: row.ctn_amount,
       ctn_to_pallet_ratio: row.ctn_to_pallet_ratio,
       pallets: row.pallets,
@@ -298,6 +328,7 @@ export async function getAllOrders(): Promise<Order[]> {
       pickup: row.pickup,
       delivery: row.delivery,
       attachment_urls: row.attachment_urls || [],
+      assigned_driver_id: row.assigned_driver_id || undefined,
       rawData: row.raw_data || {},
     }));
   } catch (error) {
@@ -320,6 +351,130 @@ export async function clearOrders() {
   }
 }
 
+export async function addOrder(order: Partial<Order>): Promise<Order> {
+  try {
+    const id = crypto.randomUUID();
+    const row = {
+      id,
+      zone: order.zone || '',
+      zone_id: order.zone_id || null,
+      district_id: order.district_id || null,
+      date: order.date || new Date().toISOString().split('T')[0],
+      priority: order.priority || 'standard',
+      status: order.status || 'pending',
+      ctn_amount: order.ctn_amount ?? null,
+      ctn_to_pallet_ratio: order.ctn_to_pallet_ratio ?? null,
+      pallets: order.pallets || 0,
+      do_number: order.do_number || null,
+      invoice_number: order.invoice_number || null,
+      pickup: order.pickup || null,
+      delivery: order.delivery || null,
+      attachment_urls: [],
+      raw_data: {},
+    };
+
+    const { error } = await supabase.from(TABLES.ORDERS).insert(row);
+    if (error) throw error;
+
+    return { ...order, id, rawData: {} } as Order;
+  } catch (error) {
+    console.error('Error adding order:', error);
+    throw error;
+  }
+}
+
+export async function updateOrder(id: string, updates: Partial<Order>) {
+  try {
+    const payload: Record<string, any> = {};
+    if (updates.zone !== undefined) payload.zone = updates.zone;
+    if (updates.date !== undefined) payload.date = updates.date;
+    if (updates.priority !== undefined) payload.priority = updates.priority;
+    if (updates.status !== undefined) payload.status = updates.status;
+    if (updates.pallets !== undefined) payload.pallets = updates.pallets;
+    if (updates.ctn_amount !== undefined) payload.ctn_amount = updates.ctn_amount ?? null;
+    if (updates.ctn_to_pallet_ratio !== undefined) payload.ctn_to_pallet_ratio = updates.ctn_to_pallet_ratio ?? null;
+    if (updates.do_number !== undefined) payload.do_number = updates.do_number || null;
+    if (updates.invoice_number !== undefined) payload.invoice_number = updates.invoice_number || null;
+    if (updates.pickup !== undefined) payload.pickup = updates.pickup || null;
+    if (updates.delivery !== undefined) payload.delivery = updates.delivery || null;
+    if (updates.zone_id !== undefined) payload.zone_id = updates.zone_id || null;
+    if (updates.district_id !== undefined) payload.district_id = updates.district_id || null;
+    if (updates.attachment_urls !== undefined) payload.attachment_urls = updates.attachment_urls;
+
+    const { error } = await supabase.from(TABLES.ORDERS).update(payload).eq('id', id);
+    if (error) throw error;
+  } catch (error) {
+    console.error('Error updating order:', error);
+    throw error;
+  }
+}
+
+export async function deleteOrder(id: string) {
+  try {
+    const { error } = await supabase.from(TABLES.ORDERS).delete().eq('id', id);
+    if (error) throw error;
+  } catch (error) {
+    console.error('Error deleting order:', error);
+    throw error;
+  }
+}
+
+export async function updateOrdersToAssigned(
+  orderDriverMap: { orderId: string; driverId: string }[]
+): Promise<void> {
+  if (orderDriverMap.length === 0) return;
+  try {
+    const now = new Date().toISOString();
+    await Promise.all(
+      orderDriverMap.map(({ orderId, driverId }) =>
+        supabase
+          .from(TABLES.ORDERS)
+          .update({ status: 'assigned', assigned_driver_id: driverId, updated_at: now })
+          .eq('id', orderId)
+      )
+    );
+  } catch (error) {
+    console.error('Error updating orders to assigned:', error);
+    throw error;
+  }
+}
+
+export async function getPendingOrderCountForDate(date: string): Promise<number> {
+  try {
+    const { count, error } = await supabase
+      .from(TABLES.ORDERS)
+      .select('id', { count: 'exact', head: true })
+      .eq('date', date)
+      .eq('status', 'pending');
+    if (error) throw error;
+    return count ?? 0;
+  } catch (error) {
+    console.error('Error getting pending order count:', error);
+    return 0;
+  }
+}
+
+export async function setLastAutoDistributionDate(date: string): Promise<void> {
+  try {
+    const { data: existing } = await supabase
+      .from(TABLES.APP_CONFIG)
+      .select('id')
+      .limit(1)
+      .single();
+
+    if (existing) {
+      const { error } = await supabase
+        .from(TABLES.APP_CONFIG)
+        .update({ last_auto_distribution_date: date })
+        .eq('id', existing.id);
+      if (error) throw error;
+    }
+  } catch (error) {
+    console.error('Error setting last auto distribution date:', error);
+    throw error;
+  }
+}
+
 // ============================================================================
 // Driver Operations
 // ============================================================================
@@ -330,8 +485,9 @@ export async function saveDrivers(drivers: Driver[], sheetId?: string) {
       id: driver.id || crypto.randomUUID(),
       name: driver.name,
       identifier: driver.identifier,
-      home_region: driver.home_region,
+      home_region: driver.home_region || null,
       max_capacity: driver.max_capacity || 11,
+      phone: driver.phone || null,
       raw_data: {},
     }));
 
@@ -361,6 +517,8 @@ export async function getAllDrivers(): Promise<Driver[]> {
       identifier: row.identifier,
       home_region: row.home_region,
       max_capacity: row.max_capacity,
+      phone: row.phone || row.raw_data?.phone || undefined, // phone column with raw_data fallback
+      is_active: row.is_active !== false, // default true if column missing
     }));
   } catch (error) {
     console.error('Error getting all drivers:', error);
@@ -376,8 +534,10 @@ export async function addDriver(driver: Driver) {
         id: driver.id || crypto.randomUUID(),
         name: driver.name,
         identifier: driver.identifier,
-        home_region: driver.home_region,
+        home_region: driver.home_region || null,
         max_capacity: driver.max_capacity || 11,
+        phone: driver.phone || null,
+        is_active: driver.is_active !== false,
         raw_data: {},
       });
 
@@ -390,14 +550,17 @@ export async function addDriver(driver: Driver) {
 
 export async function updateDriver(id: string, updates: Partial<Driver>) {
   try {
+    const updatePayload: Record<string, any> = {};
+    if (updates.name !== undefined) updatePayload.name = updates.name;
+    if (updates.identifier !== undefined) updatePayload.identifier = updates.identifier;
+    if (updates.home_region !== undefined) updatePayload.home_region = updates.home_region || null;
+    if (updates.max_capacity !== undefined) updatePayload.max_capacity = updates.max_capacity;
+    if (updates.phone !== undefined) updatePayload.phone = updates.phone || null;
+    if (updates.is_active !== undefined) updatePayload.is_active = updates.is_active;
+
     const { error } = await supabase
       .from(TABLES.DRIVERS)
-      .update({
-        name: updates.name,
-        identifier: updates.identifier,
-        home_region: updates.home_region,
-        max_capacity: updates.max_capacity,
-      })
+      .update(updatePayload)
       .eq('id', id);
 
     if (error) throw error;
@@ -419,6 +582,24 @@ export async function deleteDriver(id: string) {
     console.error('Error deleting driver:', error);
     throw error;
   }
+}
+
+export async function setDriverActive(id: string, is_active: boolean): Promise<void> {
+  try {
+    const { error } = await supabase
+      .from(TABLES.DRIVERS)
+      .update({ is_active })
+      .eq('id', id);
+    if (error) throw error;
+  } catch (error) {
+    console.error('Error setting driver active state:', error);
+    throw error;
+  }
+}
+
+export async function getActiveDrivers(): Promise<Driver[]> {
+  const all = await getAllDrivers();
+  return all.filter(d => d.is_active !== false);
 }
 
 export async function clearDrivers() {
@@ -491,7 +672,7 @@ export async function getDistribution(id: string) {
   }
 }
 
-export async function getLatestDistribution() {
+export async function getLatestDistribution(): Promise<DistributionResult | null> {
   try {
     const { data, error } = await supabase
       .from(TABLES.DISTRIBUTIONS)
@@ -501,10 +682,37 @@ export async function getLatestDistribution() {
       .single();
 
     if (error) return null;
-    return data;
+    return {
+      assignments: data.assignments || [],
+      unassignedDrivers: data.unassigned_drivers || [],
+      pendingBalances: data.pending_balances || [],
+      summary: data.summary,
+      timestamp: data.timestamp,
+      targetDate: data.target_date,
+    };
   } catch (error) {
     console.error('Error getting latest distribution:', error);
     return null;
+  }
+}
+
+export async function markOrdersAsCompleted(orderIds: string[], driverId?: string): Promise<void> {
+  if (orderIds.length === 0) return;
+  try {
+    const payload: Record<string, any> = {
+      status: 'completed',
+      updated_at: new Date().toISOString(),
+    };
+    if (driverId) payload.assigned_driver_id = driverId;
+
+    const { error } = await supabase
+      .from(TABLES.ORDERS)
+      .update(payload)
+      .in('id', orderIds);
+    if (error) throw error;
+  } catch (error) {
+    console.error('Error marking orders as completed:', error);
+    throw error;
   }
 }
 

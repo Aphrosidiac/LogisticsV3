@@ -1,8 +1,9 @@
 'use client';
 
 import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
-import { AppConfig, AppCache, LogEntry, Order, Driver, DistributionResult } from '@/types';
+import { AppConfig, AppCache, LogEntry, Order, Driver, DistributionResult, ZoneWithDistricts } from '@/types';
 import * as db from '@/lib/db-supabase';
+import { getZonesWithDistricts } from '@/lib/db-zones';
 
 interface AppContextState {
     config: AppConfig;
@@ -18,6 +19,7 @@ type AppAction =
     | { type: 'ADD_LOG'; payload: LogEntry }
     | { type: 'SET_ORDERS'; payload: Order[] }
     | { type: 'SET_DRIVERS'; payload: Driver[] }
+    | { type: 'SET_ZONES'; payload: ZoneWithDistricts[] }
     | { type: 'SET_DISTRIBUTION'; payload: DistributionResult }
     | { type: 'SET_ADMIN_NUMBERS'; payload: string[] }
     | { type: 'SET_LOADING'; payload: boolean }
@@ -33,6 +35,7 @@ const initialState: AppContextState = {
     cache: {
         orders: [],
         drivers: [],
+        zones: [],
         lastDistribution: null,
         lastFetch: null,
     },
@@ -57,6 +60,8 @@ function appReducer(state: AppContextState, action: AppAction): AppContextState 
             };
         case 'SET_DRIVERS':
             return { ...state, cache: { ...state.cache, drivers: action.payload } };
+        case 'SET_ZONES':
+            return { ...state, cache: { ...state.cache, zones: action.payload } };
         case 'SET_DISTRIBUTION':
             return { ...state, cache: { ...state.cache, lastDistribution: action.payload } };
         case 'SET_ADMIN_NUMBERS':
@@ -74,6 +79,7 @@ interface AppContextValue extends AppContextState {
     dispatch: React.Dispatch<AppAction>;
     addLog: (type: LogEntry['type'], message: string, details?: string) => void;
     saveData: () => void;
+    saveAdminNumbers: (numbers: string[]) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -88,6 +94,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 const config = await db.getConfig();
                 const orders = await db.getAllOrders();
                 const drivers = await db.getAllDrivers();
+                const zones = await getZonesWithDistricts(true);
                 const latestDist = await db.getLatestDistribution();
                 const logs = await db.getAllLogs();
 
@@ -97,8 +104,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
                     payload: {
                         orders,
                         drivers,
+                        zones,
                         lastDistribution: latestDist || null,
-                        lastFetch: null,
+                        lastFetch: new Date().toISOString(),
                     },
                 });
                 dispatch({ type: 'SET_LOGS', payload: logs });
@@ -111,18 +119,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
         loadData();
     }, []);
 
-    // Save data to IndexedDB whenever it changes
+    // Save config to DB (orders/drivers are managed directly via db-supabase, not overwritten here)
     const saveData = async () => {
         try {
             await db.saveConfig(state.config);
-            if (state.cache.orders.length > 0) {
-                await db.saveOrders(state.cache.orders);
-            }
-            if (state.cache.drivers.length > 0) {
-                await db.saveDrivers(state.cache.drivers);
-            }
         } catch (error) {
-            console.error('Failed to save data:', error);
+            console.error('Failed to save config:', error);
+        }
+    };
+
+    // Persist admin numbers to DB immediately + update state
+    const saveAdminNumbers = async (numbers: string[]) => {
+        dispatch({ type: 'SET_ADMIN_NUMBERS', payload: numbers });
+        try {
+            await db.saveConfig({ ...state.config, adminNumbers: numbers });
+        } catch (error) {
+            console.error('Failed to save admin numbers:', error);
         }
     };
 
@@ -136,15 +148,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
     };
 
-    // Auto-save on config/cache changes
+    // Auto-save config changes only (not cache — orders/drivers are managed directly via db-supabase)
     useEffect(() => {
         if (!state.isLoading) {
-            saveData();
+            db.saveConfig(state.config).catch(err =>
+                console.error('Failed to auto-save config:', err)
+            );
         }
-    }, [state.config, state.cache, state.isLoading]);
+    }, [state.config, state.isLoading]);
 
     return (
-        <AppContext.Provider value={{ ...state, dispatch, addLog, saveData }}>
+        <AppContext.Provider value={{ ...state, dispatch, addLog, saveData, saveAdminNumbers }}>
             {children}
         </AppContext.Provider>
     );
