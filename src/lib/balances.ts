@@ -1,6 +1,7 @@
 // Pending Balance Tracking System for partial fulfillments
 import { supabase, TABLES } from './supabase';
 import type { PendingBalance, Order } from '@/types';
+import { generateId } from './utils';
 
 /**
  * Create a new pending balance record
@@ -25,7 +26,7 @@ export async function createPendingBalance(
 
     // Create balance record
     const balance: Omit<PendingBalance, 'created_at' | 'updated_at'> = {
-      id: crypto.randomUUID(),
+      id: generateId(),
       original_order_id: orderId,
       zone: order.zone,
       zone_id: order.zone_id,
@@ -115,7 +116,7 @@ export async function convertBalancesToOrders(
   balances: PendingBalance[]
 ): Promise<Order[]> {
   return balances.map((balance) => ({
-    id: crypto.randomUUID(),
+    id: generateId(),
     zone: balance.zone,
     zone_id: balance.zone_id,
     district_id: balance.district_id,

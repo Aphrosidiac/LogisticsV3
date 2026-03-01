@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Plus, Trash2, GripVertical, AlertCircle } from 'lucide-react';
 import type { FieldSchema, FieldType, TableSchema } from '@/types';
+import { generateId } from '@/lib/utils';
 
 interface SchemaBuilderProps {
     type: 'orders' | 'drivers';
@@ -112,7 +113,7 @@ export default function SchemaBuilder({ type, onSave, onCancel, initialSchema }:
 
     const addField = () => {
         const newField: FieldSchema = {
-            id: crypto.randomUUID(),
+            id: generateId(),
             name: '',
             label: '',
             type: 'text',
@@ -165,7 +166,7 @@ export default function SchemaBuilder({ type, onSave, onCancel, initialSchema }:
         }
 
         const schema: TableSchema = {
-            id: initialSchema?.id || crypto.randomUUID(),
+            id: initialSchema?.id || generateId(),
             name: name.trim(),
             type,
             fields,

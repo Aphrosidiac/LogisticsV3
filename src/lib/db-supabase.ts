@@ -2,6 +2,7 @@
 import { supabase, TABLES } from './supabase';
 import type { Order, Driver, AppConfig, LogEntry, DistributionResult, MessageTemplate, Sheet } from '@/types';
 import { getZone, getDistrict } from './db-zones';
+import { generateId } from './utils';
 
 // ============================================================================
 // Config Operations
@@ -25,7 +26,7 @@ export async function getConfig(): Promise<AppConfig> {
         whatsappConnected: false,
         messageTemplates: [
           {
-            id: crypto.randomUUID(),
+            id: generateId(),
             name: 'Default',
             content: 'Hello {driver},\n\nYour delivery assignment:\n{zones}\nTotal: {pallets} pallets\n\nThank you!',
           },
@@ -147,7 +148,7 @@ export async function createSheet(
 ) {
   try {
     const sheet = {
-      id: crypto.randomUUID(),
+      id: generateId(),
       name,
       type,
       headers,
@@ -271,7 +272,7 @@ export async function saveOrders(orders: Order[], sheetId?: string) {
         }
 
         return {
-          id: order.id || crypto.randomUUID(),
+          id: order.id || generateId(),
           sheet_id: sheetId,
           zone: zoneText,
           zone_id: order.zone_id,
@@ -353,7 +354,7 @@ export async function clearOrders() {
 
 export async function addOrder(order: Partial<Order>): Promise<Order> {
   try {
-    const id = crypto.randomUUID();
+    const id = generateId();
     const row = {
       id,
       zone: order.zone || '',
@@ -482,7 +483,7 @@ export async function setLastAutoDistributionDate(date: string): Promise<void> {
 export async function saveDrivers(drivers: Driver[], sheetId?: string) {
   try {
     const driversToInsert = drivers.map((driver) => ({
-      id: driver.id || crypto.randomUUID(),
+      id: driver.id || generateId(),
       name: driver.name,
       identifier: driver.identifier,
       home_region: driver.home_region || null,
@@ -531,7 +532,7 @@ export async function addDriver(driver: Driver) {
     const { error } = await supabase
       .from(TABLES.DRIVERS)
       .insert({
-        id: driver.id || crypto.randomUUID(),
+        id: driver.id || generateId(),
         name: driver.name,
         identifier: driver.identifier,
         home_region: driver.home_region || null,
@@ -622,7 +623,7 @@ export async function clearDrivers() {
 
 export async function saveDistribution(distribution: DistributionResult) {
   try {
-    const id = crypto.randomUUID();
+    const id = generateId();
     const { error } = await supabase
       .from(TABLES.DISTRIBUTIONS)
       .insert({
@@ -723,7 +724,7 @@ export async function markOrdersAsCompleted(orderIds: string[], driverId?: strin
 export async function addLog(log: Omit<LogEntry, 'id' | 'timestamp'>) {
   try {
     const entry: LogEntry = {
-      id: crypto.randomUUID(),
+      id: generateId(),
       timestamp: new Date().toISOString(),
       ...log,
     };
@@ -802,7 +803,7 @@ export async function addWhatsAppMessage(
 ) {
   try {
     const msg = {
-      id: crypto.randomUUID(),
+      id: generateId(),
       recipient,
       message,
       status: 'pending' as const,

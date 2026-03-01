@@ -2,7 +2,7 @@
 // Supports date-based scheduling, region-based driver assignment, and balance tracking
 
 import { Order, Driver, DriverAssignment, DistributionResult, PendingBalance } from '@/types';
-import { shuffleArray } from './utils';
+import { shuffleArray, generateId } from './utils';
 
 interface DriverState {
   driver: Driver;
@@ -129,7 +129,7 @@ function createPendingBalance(
   nextDay.setDate(nextDay.getDate() + 1);
 
   return {
-    id: crypto.randomUUID(),
+    id: generateId(),
     original_order_id: order.id,
     zone: order.zone,
     pickup: order.pickup,

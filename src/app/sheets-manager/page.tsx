@@ -30,6 +30,7 @@ import { useApp } from '@/context/AppContext';
 import * as db from '@/lib/db-supabase';
 import * as csv from '@/lib/csv';
 import type { Order, Driver } from '@/types';
+import { generateId } from '@/lib/utils';
 
 // ── Column definitions ────────────────────────────────────────────────────────
 
@@ -491,7 +492,7 @@ export default function DatabaseManagerPage() {
         setSaving(true);
         try {
             if (driverModal?.mode === 'add') {
-                await db.addDriver({ ...data, id: crypto.randomUUID() } as Driver);
+                await db.addDriver({ ...data, id: generateId() } as Driver);
                 await loadAll(); // reload to get the DB-assigned id
                 addLog('success', 'Driver added');
             } else if (driverModal?.mode === 'edit' && data.id) {

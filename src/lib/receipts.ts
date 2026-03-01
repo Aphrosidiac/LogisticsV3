@@ -1,4 +1,5 @@
 // Receipt Management System - Using localStorage for persistence
+import { generateId } from './utils';
 
 export interface ReceiptFile {
   id: string;
@@ -85,7 +86,7 @@ export async function uploadReceipt(
     
     // Create receipt metadata
     const receipt: ReceiptFile = {
-      id: crypto.randomUUID(),
+      id: generateId(),
       sheet_id: sheetId,
       row_index: rowIndex,
       file_name: file.name,
