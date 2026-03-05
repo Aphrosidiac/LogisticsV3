@@ -1,10 +1,10 @@
 // WhatsApp init endpoint — proxies to cron-worker:3001
 import { NextRequest, NextResponse } from 'next/server';
 import { initializeWhatsApp, destroyWhatsApp, getWhatsAppState } from '@/lib/whatsapp-client';
+import { withAuth } from '@/lib/api-auth';
 
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async (request: NextRequest) => {
   try {
-    // Return current worker state (used by UI polling loop)
     const state = await getWhatsAppState();
     return NextResponse.json({
       status: state.connected ? 'ready' : state.initializing ? 'initializing' : 'idle',
@@ -17,9 +17,9 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+});
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (request: NextRequest) => {
   try {
     const result = await initializeWhatsApp();
     return NextResponse.json(result);
@@ -29,9 +29,9 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+});
 
-export async function DELETE(request: NextRequest) {
+export const DELETE = withAuth(async (request: NextRequest) => {
   try {
     await destroyWhatsApp();
     return NextResponse.json({ status: 'success', message: 'WhatsApp disconnected successfully' });
@@ -41,4 +41,4 @@ export async function DELETE(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+});

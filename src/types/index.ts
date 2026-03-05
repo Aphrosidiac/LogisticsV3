@@ -41,7 +41,7 @@ export interface Order {
   delivery?: string;
   invoice?: string;
   attachment_urls?: string[];
-  status?: 'pending' | 'assigned' | 'in_progress' | 'completed' | 'cancelled';
+  status?: 'pending' | 'assigned' | 'in_progress' | 'completed' | 'cancelled' | 'holding';
   completed_date?: string;
   assigned_driver_id?: string;
   assigned_date?: string;
@@ -183,6 +183,7 @@ export interface AppConfig {
   };
   distributionTime?: string;           // "HH:MM" e.g. "20:00"
   lastAutoDistributionDate?: string;   // YYYY-MM-DD
+  autoMessageRecipients?: 'admins' | 'drivers' | 'both'; // Who receives WhatsApp after auto-distribution
 }
 
 export interface AppCache {

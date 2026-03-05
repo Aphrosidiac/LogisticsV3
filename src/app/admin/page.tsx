@@ -4,8 +4,10 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useApp } from '@/context/AppContext';
 import { formatDistributionMessage, formatDriverAssignmentMessage } from '@/lib/distribution';
-import { formatPhoneNumber, validatePhoneNumber } from '@/lib/utils';
+import { formatPhoneNumber, validatePhoneNumber, formatDisplayDate } from '@/lib/utils';
 import * as db from '@/lib/db-supabase';
+import { useWhatsAppSender } from '@/hooks/useWhatsAppSender';
+import { useMarkDelivered } from '@/hooks/useMarkDelivered';
 import {
     Phone,
     Plus,
@@ -25,21 +27,15 @@ import {
     PackageCheck,
     RefreshCw,
 } from 'lucide-react';
-import type { DriverAssignment } from '@/types';
-
-type SendStatus = 'idle' | 'sending' | 'sent' | 'failed';
-
-interface DriverDispatchState {
-    status: SendStatus;
-    error?: string;
-}
 
 export default function AdminPage() {
     const { config, cache, dispatch, addLog, saveAdminNumbers, isLoading } = useApp();
 
-    // WhatsApp connection
-    const [waConnected, setWaConnected] = useState(false);
-    const [waChecked, setWaChecked] = useState(false);
+    // WhatsApp sender hook
+    const wa = useWhatsAppSender(addLog);
+
+    // Mark delivered hook
+    const { deliveredDrivers, markingDriverId, markDelivered } = useMarkDelivered(addLog);
 
     // Driver phone numbers (keyed by driver id)
     const [driverPhones, setDriverPhones] = useState<Record<string, string>>({});
@@ -48,50 +44,31 @@ export default function AdminPage() {
     const [editError, setEditError] = useState<string | null>(null);
     const [savingId, setSavingId] = useState<string | null>(null);
 
-    // Per-driver send status
-    const [sendStates, setSendStates] = useState<Record<string, DriverDispatchState>>({});
-
-    // Admin broadcast
-    const [broadcastStatus, setBroadcastStatus] = useState<SendStatus>('idle');
-    const [broadcastError, setBroadcastError] = useState<string | null>(null);
-
     // Admin numbers management
     const [phoneInput, setPhoneInput] = useState('');
     const [phoneError, setPhoneError] = useState<string | null>(null);
 
     // Distribution schedule
     const [distributionTime, setDistributionTime] = useState(config.distributionTime || '20:00');
+    const [autoRecipients, setAutoRecipients] = useState<'admins' | 'drivers' | 'both'>(config.autoMessageRecipients || 'drivers');
     const [isSavingSchedule, setIsSavingSchedule] = useState(false);
     const [scheduleSaved, setScheduleSaved] = useState(false);
 
-    // Mark delivered
-    const [deliveredDrivers, setDeliveredDrivers] = useState<Set<string>>(new Set());
-    const [markingDriverId, setMarkingDriverId] = useState<string | null>(null);
+    // Holding orders count
+    const [holdingCount, setHoldingCount] = useState(0);
 
     const assignments = cache.lastDistribution?.assignments || [];
 
     useEffect(() => {
-        checkWaStatus();
+        wa.checkStatus();
         loadDriverPhones();
+        db.getHoldingOrders().then(h => setHoldingCount(h.length)).catch(() => {});
     }, []);
 
     useEffect(() => {
-        if (config.distributionTime) {
-            setDistributionTime(config.distributionTime);
-        }
-    }, [config.distributionTime]);
-
-    async function checkWaStatus() {
-        try {
-            const res = await fetch('/api/whatsapp/status');
-            const data = await res.json();
-            setWaConnected(data.connected);
-        } catch {
-            setWaConnected(false);
-        } finally {
-            setWaChecked(true);
-        }
-    }
+        if (config.distributionTime) setDistributionTime(config.distributionTime);
+        if (config.autoMessageRecipients) setAutoRecipients(config.autoMessageRecipients);
+    }, [config.distributionTime, config.autoMessageRecipients]);
 
     async function loadDriverPhones() {
         try {
@@ -108,9 +85,9 @@ export default function AdminPage() {
 
     // ── Driver phone editing ────────────────────────────────────────────────
 
-    function startEdit(assignment: DriverAssignment) {
-        setEditingId(assignment.driver.id);
-        setEditValue(driverPhones[assignment.driver.id] || '');
+    function startEdit(driverId: string) {
+        setEditingId(driverId);
+        setEditValue(driverPhones[driverId] || '');
         setEditError(null);
     }
 
@@ -133,7 +110,7 @@ export default function AdminPage() {
             setDriverPhones(prev => ({ ...prev, [driverId]: cleaned }));
             setEditingId(null);
             setEditValue('');
-        } catch (err: any) {
+        } catch {
             setEditError('Failed to save. Try again.');
         } finally {
             setSavingId(null);
@@ -142,39 +119,17 @@ export default function AdminPage() {
 
     // ── Per-driver send ─────────────────────────────────────────────────────
 
-    async function sendToDriver(assignment: DriverAssignment) {
-        const phone = driverPhones[assignment.driver.id];
-        if (!phone) return;
-
-        const driverId = assignment.driver.id;
-        setSendStates(prev => ({ ...prev, [driverId]: { status: 'sending' } }));
-
-        try {
-            const message = formatDriverAssignmentMessage(assignment);
-            const res = await fetch('/api/whatsapp/send', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ recipient: phone, message }),
-            });
-            const data = await res.json();
-
-            if (data.status === 'success') {
-                setSendStates(prev => ({ ...prev, [driverId]: { status: 'sent' } }));
-                addLog('success', `Sent assignment to ${assignment.driver.name}`);
-                await db.addWhatsAppMessage(phone, message);
-            } else {
-                setSendStates(prev => ({ ...prev, [driverId]: { status: 'failed', error: data.message } }));
-                addLog('error', `Failed to send to ${assignment.driver.name}`, data.message);
-            }
-        } catch (err: any) {
-            setSendStates(prev => ({ ...prev, [driverId]: { status: 'failed', error: err.message } }));
-        }
+    async function sendToDriver(driverId: string, driverName: string, phone: string, assignment: any) {
+        const message = formatDriverAssignmentMessage(assignment);
+        await wa.sendMessage(phone, message, driverId, `Sent assignment to ${driverName}`);
     }
 
     async function sendAll() {
         const eligible = assignments.filter(a => driverPhones[a.driver.id]);
         for (const assignment of eligible) {
-            await sendToDriver(assignment);
+            const phone = driverPhones[assignment.driver.id];
+            const message = formatDriverAssignmentMessage(assignment);
+            await wa.sendMessage(phone, message, assignment.driver.id, `Sent assignment to ${assignment.driver.name}`);
             await new Promise(r => setTimeout(r, 400));
         }
     }
@@ -183,30 +138,8 @@ export default function AdminPage() {
 
     async function handleBroadcast() {
         if (!cache.lastDistribution || config.adminNumbers.length === 0) return;
-        setBroadcastStatus('sending');
-        setBroadcastError(null);
-
-        try {
-            const message = formatDistributionMessage(cache.lastDistribution);
-            for (const recipient of config.adminNumbers) {
-                const res = await fetch('/api/whatsapp/send', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ recipient, message }),
-                });
-                const data = await res.json();
-                if (data.status === 'success') {
-                    await db.addWhatsAppMessage(recipient, message);
-                }
-            }
-            setBroadcastStatus('sent');
-            addLog('success', `Broadcast sent to ${config.adminNumbers.length} admin(s)`);
-            setTimeout(() => setBroadcastStatus('idle'), 4000);
-        } catch (err: any) {
-            setBroadcastStatus('failed');
-            setBroadcastError(err.message);
-            addLog('error', 'Broadcast failed', err.message);
-        }
+        const message = formatDistributionMessage(cache.lastDistribution);
+        await wa.broadcast(config.adminNumbers, message);
     }
 
     // ── Admin number management ─────────────────────────────────────────────
@@ -237,7 +170,7 @@ export default function AdminPage() {
     async function saveSchedule() {
         setIsSavingSchedule(true);
         try {
-            const updatedConfig = { ...config, distributionTime };
+            const updatedConfig = { ...config, distributionTime, autoMessageRecipients: autoRecipients };
             await db.saveConfig(updatedConfig);
             dispatch({ type: 'SET_CONFIG', payload: updatedConfig });
             setScheduleSaved(true);
@@ -250,33 +183,12 @@ export default function AdminPage() {
         }
     }
 
-    // ── Mark Delivered ──────────────────────────────────────────────────────
-
-    async function markDelivered(assignment: DriverAssignment) {
-        const driverId = assignment.driver.id;
-        const orderIds = assignment.orders.map((o) => o.id).filter(Boolean);
-        if (orderIds.length === 0) return;
-
-        setMarkingDriverId(driverId);
-        try {
-            await db.markOrdersAsCompleted(orderIds, driverId);
-            const updatedOrders = await db.getAllOrders();
-            dispatch({ type: 'SET_ORDERS', payload: updatedOrders });
-            setDeliveredDrivers((prev) => new Set([...prev, driverId]));
-            addLog('success', `Marked ${orderIds.length} order(s) as completed for ${assignment.driver.name}`);
-        } catch (err: any) {
-            addLog('error', `Failed to mark delivered for ${assignment.driver.name}`, err.message);
-        } finally {
-            setMarkingDriverId(null);
-        }
-    }
-
     // ── Helpers ─────────────────────────────────────────────────────────────
 
     const eligibleCount = assignments.filter(a => driverPhones[a.driver.id]).length;
 
     function sendButtonContent(driverId: string) {
-        const state = sendStates[driverId];
+        const state = wa.sendStates[driverId];
         if (state?.status === 'sending') return <><Loader className="w-4 h-4 animate-spin" /> Sending…</>;
         if (state?.status === 'sent')    return <><Check className="w-4 h-4" /> Sent</>;
         if (state?.status === 'failed')  return <><X className="w-4 h-4" /> Failed</>;
@@ -284,7 +196,7 @@ export default function AdminPage() {
     }
 
     function sendButtonClass(driverId: string) {
-        const s = sendStates[driverId]?.status;
+        const s = wa.sendStates[driverId]?.status;
         if (s === 'sent')    return 'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 cursor-default';
         if (s === 'failed')  return 'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-rose-500/20 text-rose-400 border border-rose-500/30 cursor-default';
         if (s === 'sending') return 'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-zinc-700 text-zinc-400 cursor-wait';
@@ -302,7 +214,7 @@ export default function AdminPage() {
             </div>
 
             {/* WhatsApp status banner */}
-            {waChecked && !waConnected && (
+            {wa.waChecked && !wa.waConnected && (
                 <div className="flex items-center gap-3 bg-amber-500/10 border border-amber-500/30 rounded-xl px-4 py-3">
                     <WifiOff className="w-5 h-5 text-amber-400 shrink-0" />
                     <span className="text-sm text-amber-300">
@@ -312,6 +224,19 @@ export default function AdminPage() {
                         </Link>{' '}
                         to scan a QR code first.
                     </span>
+                </div>
+            )}
+
+            {/* Holding orders banner */}
+            {holdingCount > 0 && (
+                <div className="flex items-center gap-3 bg-orange-500/10 border border-orange-500/30 rounded-xl px-4 py-3">
+                    <Clock className="w-5 h-5 text-orange-400 shrink-0" />
+                    <span className="text-sm text-orange-300">
+                        <strong>{holdingCount}</strong> holding order{holdingCount !== 1 ? 's' : ''} awaiting delivery details.
+                    </span>
+                    <Link href="/sheets-manager" className="ml-auto text-xs text-orange-400 hover:text-orange-300 underline whitespace-nowrap">
+                        View in DB Manager →
+                    </Link>
                 </div>
             )}
 
@@ -330,7 +255,7 @@ export default function AdminPage() {
                     {assignments.length > 0 && eligibleCount > 0 && (
                         <button
                             onClick={sendAll}
-                            disabled={!waConnected}
+                            disabled={!wa.waConnected}
                             className="btn-primary flex items-center gap-2 text-sm shrink-0"
                         >
                             <Send className="w-4 h-4" />
@@ -362,8 +287,8 @@ export default function AdminPage() {
                             const driverId = assignment.driver.id;
                             const phone = driverPhones[driverId];
                             const isEditing = editingId === driverId;
-                            const sendState = sendStates[driverId]?.status;
-                            const canSend = !!phone && waConnected && sendState !== 'sending';
+                            const sendState = wa.sendStates[driverId]?.status;
+                            const canSend = !!phone && wa.waConnected && sendState !== 'sending';
 
                             return (
                                 <div
@@ -388,45 +313,43 @@ export default function AdminPage() {
                                         {/* Phone + send */}
                                         <div className="flex items-center gap-2 shrink-0">
                                             {isEditing ? (
-                                                <>
-                                                    <div className="flex flex-col gap-1">
-                                                        <div className="flex items-center gap-2">
-                                                            <input
-                                                                type="tel"
-                                                                value={editValue}
-                                                                onChange={e => { setEditValue(e.target.value); setEditError(null); }}
-                                                                onKeyDown={e => { if (e.key === 'Enter') savePhone(driverId); if (e.key === 'Escape') cancelEdit(); }}
-                                                                placeholder="60123456789"
-                                                                className="input text-sm py-1 w-40"
-                                                                autoFocus
-                                                            />
-                                                            <button
-                                                                onClick={() => savePhone(driverId)}
-                                                                disabled={savingId === driverId}
-                                                                className="p-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-500 transition-colors disabled:opacity-50"
-                                                            >
-                                                                {savingId === driverId
-                                                                    ? <Loader className="w-4 h-4 animate-spin" />
-                                                                    : <Check className="w-4 h-4" />
-                                                                }
-                                                            </button>
-                                                            <button
-                                                                onClick={cancelEdit}
-                                                                className="p-1.5 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700 rounded-lg transition-colors"
-                                                            >
-                                                                <X className="w-4 h-4" />
-                                                            </button>
-                                                        </div>
-                                                        {editError && (
-                                                            <p className="text-xs text-rose-400">{editError}</p>
-                                                        )}
+                                                <div className="flex flex-col gap-1">
+                                                    <div className="flex items-center gap-2">
+                                                        <input
+                                                            type="tel"
+                                                            value={editValue}
+                                                            onChange={e => { setEditValue(e.target.value); setEditError(null); }}
+                                                            onKeyDown={e => { if (e.key === 'Enter') savePhone(driverId); if (e.key === 'Escape') cancelEdit(); }}
+                                                            placeholder="60123456789"
+                                                            className="input text-sm py-1 w-40"
+                                                            autoFocus
+                                                        />
+                                                        <button
+                                                            onClick={() => savePhone(driverId)}
+                                                            disabled={savingId === driverId}
+                                                            className="p-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-500 transition-colors disabled:opacity-50"
+                                                        >
+                                                            {savingId === driverId
+                                                                ? <Loader className="w-4 h-4 animate-spin" />
+                                                                : <Check className="w-4 h-4" />
+                                                            }
+                                                        </button>
+                                                        <button
+                                                            onClick={cancelEdit}
+                                                            className="p-1.5 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700 rounded-lg transition-colors"
+                                                        >
+                                                            <X className="w-4 h-4" />
+                                                        </button>
                                                     </div>
-                                                </>
+                                                    {editError && (
+                                                        <p className="text-xs text-rose-400">{editError}</p>
+                                                    )}
+                                                </div>
                                             ) : (
                                                 <>
                                                     {phone ? (
                                                         <button
-                                                            onClick={() => startEdit(assignment)}
+                                                            onClick={() => startEdit(driverId)}
                                                             className="flex items-center gap-1.5 text-xs text-zinc-300 bg-zinc-700/50 hover:bg-zinc-700 px-2.5 py-1.5 rounded-lg transition-colors"
                                                         >
                                                             <Phone className="w-3 h-3" />
@@ -435,7 +358,7 @@ export default function AdminPage() {
                                                         </button>
                                                     ) : (
                                                         <button
-                                                            onClick={() => startEdit(assignment)}
+                                                            onClick={() => startEdit(driverId)}
                                                             className="flex items-center gap-1.5 text-xs text-zinc-500 bg-zinc-800 hover:bg-zinc-700 px-2.5 py-1.5 rounded-lg border border-dashed border-zinc-600 transition-colors"
                                                         >
                                                             <Plus className="w-3 h-3" />
@@ -443,7 +366,7 @@ export default function AdminPage() {
                                                         </button>
                                                     )}
                                                     <button
-                                                        onClick={() => sendToDriver(assignment)}
+                                                        onClick={() => sendToDriver(driverId, assignment.driver.name, phone, assignment)}
                                                         disabled={!canSend}
                                                         className={sendButtonClass(driverId)}
                                                     >
@@ -455,9 +378,9 @@ export default function AdminPage() {
                                     </div>
 
                                     {/* Failed error message */}
-                                    {sendStates[driverId]?.status === 'failed' && sendStates[driverId]?.error && (
+                                    {wa.sendStates[driverId]?.status === 'failed' && wa.sendStates[driverId]?.error && (
                                         <p className="text-xs text-rose-400 mt-2">
-                                            {sendStates[driverId].error}
+                                            {wa.sendStates[driverId].error}
                                         </p>
                                     )}
 
@@ -470,7 +393,7 @@ export default function AdminPage() {
                                             </span>
                                         ) : (
                                             <button
-                                                onClick={() => markDelivered(assignment)}
+                                                onClick={() => markDelivered(assignment, (orders) => dispatch({ type: 'SET_ORDERS', payload: orders }))}
                                                 disabled={markingDriverId === driverId}
                                                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20 transition-colors disabled:opacity-50 disabled:cursor-wait"
                                             >
@@ -565,14 +488,14 @@ export default function AdminPage() {
                         disabled={
                             !cache.lastDistribution ||
                             config.adminNumbers.length === 0 ||
-                            !waConnected ||
-                            broadcastStatus === 'sending'
+                            !wa.waConnected ||
+                            wa.broadcastStatus === 'sending'
                         }
                         className="btn-primary flex items-center gap-2"
                     >
-                        {broadcastStatus === 'sending' ? (
+                        {wa.broadcastStatus === 'sending' ? (
                             <><Loader className="w-5 h-5 animate-spin" /> Sending…</>
-                        ) : broadcastStatus === 'sent' ? (
+                        ) : wa.broadcastStatus === 'sent' ? (
                             <><CheckCircle2 className="w-5 h-5 text-emerald-400" /> Sent!</>
                         ) : (
                             <><Send className="w-5 h-5" /> Broadcast to All Admins</>
@@ -593,10 +516,10 @@ export default function AdminPage() {
                     )}
                 </div>
 
-                {broadcastStatus === 'failed' && broadcastError && (
+                {wa.broadcastStatus === 'failed' && wa.broadcastError && (
                     <p className="text-sm text-rose-400 flex items-center gap-2">
                         <X className="w-4 h-4" />
-                        {broadcastError}
+                        {wa.broadcastError}
                     </p>
                 )}
             </div>
@@ -634,23 +557,50 @@ export default function AdminPage() {
                     </button>
                 </div>
 
+                <div className="space-y-2 pt-2 border-t border-zinc-800">
+                    <p className="text-sm text-zinc-400 font-medium">After auto-distribution, send WhatsApp to:</p>
+                    <div className="flex flex-wrap gap-4">
+                        {([
+                            { value: 'drivers' as const, label: 'Drivers only', desc: 'Each driver gets their assignment' },
+                            { value: 'admins' as const, label: 'Admins only', desc: 'Admins get the full report' },
+                            { value: 'both' as const, label: 'Both', desc: 'Drivers + admins' },
+                        ]).map(option => (
+                            <label
+                                key={option.value}
+                                className={`flex items-start gap-3 px-4 py-3 rounded-xl border cursor-pointer transition-colors ${
+                                    autoRecipients === option.value
+                                        ? 'bg-emerald-500/10 border-emerald-500/30'
+                                        : 'bg-zinc-800/50 border-zinc-700 hover:border-zinc-600'
+                                }`}
+                            >
+                                <input
+                                    type="radio"
+                                    name="autoRecipients"
+                                    value={option.value}
+                                    checked={autoRecipients === option.value}
+                                    onChange={() => setAutoRecipients(option.value)}
+                                    className="mt-0.5 accent-emerald-500"
+                                />
+                                <div>
+                                    <p className={`text-sm font-medium ${autoRecipients === option.value ? 'text-emerald-400' : 'text-zinc-300'}`}>
+                                        {option.label}
+                                    </p>
+                                    <p className="text-xs text-zinc-500">{option.desc}</p>
+                                </div>
+                            </label>
+                        ))}
+                    </div>
+                </div>
+
                 <p className="text-sm text-zinc-500">
                     Last auto-run:{' '}
                     <span className="text-zinc-300">
                         {config.lastAutoDistributionDate
-                            ? (() => {
-                                const [y, m, d] = config.lastAutoDistributionDate.split('-');
-                                return `${d}/${m}/${y}`;
-                            })()
+                            ? formatDisplayDate(config.lastAutoDistributionDate)
                             : 'Never'
                         }
                     </span>
                 </p>
-
-                <div className="text-xs text-zinc-500 bg-zinc-800/50 rounded-lg p-3 border border-zinc-700">
-                    Run <code className="text-zinc-300 bg-zinc-700 px-1 rounded">npm run cron</code> in a separate terminal alongside{' '}
-                    <code className="text-zinc-300 bg-zinc-700 px-1 rounded">npm run dev</code> to enable auto-distribution.
-                </div>
             </div>
         </div>
     );

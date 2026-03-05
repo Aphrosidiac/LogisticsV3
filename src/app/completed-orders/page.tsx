@@ -20,6 +20,7 @@ import {
 import DOViewerModal from '@/components/DOViewerModal';
 import { getCompletedOrders, formatCompletedDate, type CompletedOrder } from '@/lib/completed-orders';
 import * as db from '@/lib/db-supabase';
+import { formatDisplayDate } from '@/lib/utils';
 
 export default function CompletedOrdersPage() {
   const [orders, setOrders] = useState<CompletedOrder[]>([]);
@@ -379,7 +380,7 @@ export default function CompletedOrdersPage() {
                     <div className="space-y-1">
                       <div className="flex items-center gap-2 text-sm">
                         <Calendar className="w-4 h-4 text-zinc-400" />
-                        <span className="text-zinc-400">Order: {order.date.split('-').reverse().join('/')}</span>
+                        <span className="text-zinc-400">Order: {formatDisplayDate(order.date)}</span>
                       </div>
                       <div className="flex items-center gap-2 text-sm">
                         <Clock className="w-4 h-4 text-emerald-400" />

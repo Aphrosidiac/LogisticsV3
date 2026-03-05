@@ -50,6 +50,46 @@ export async function getZone(id: string): Promise<Zone | null> {
 }
 
 /**
+ * Get multiple zones by IDs in a single query
+ */
+export async function getZonesByIds(ids: string[]): Promise<Map<string, Zone>> {
+  const unique = [...new Set(ids.filter(Boolean))];
+  if (unique.length === 0) return new Map();
+  try {
+    const { data, error } = await supabase
+      .from(TABLES.ZONES)
+      .select('*')
+      .in('id', unique);
+
+    if (error) throw error;
+    return new Map((data || []).map(z => [z.id, z]));
+  } catch (error) {
+    console.error('Error fetching zones by ids:', error);
+    return new Map();
+  }
+}
+
+/**
+ * Get multiple districts by IDs in a single query
+ */
+export async function getDistrictsByIds(ids: string[]): Promise<Map<string, District>> {
+  const unique = [...new Set(ids.filter(Boolean))];
+  if (unique.length === 0) return new Map();
+  try {
+    const { data, error } = await supabase
+      .from(TABLES.DISTRICTS)
+      .select('*')
+      .in('id', unique);
+
+    if (error) throw error;
+    return new Map((data || []).map(d => [d.id, d]));
+  } catch (error) {
+    console.error('Error fetching districts by ids:', error);
+    return new Map();
+  }
+}
+
+/**
  * Create a new zone
  */
 export async function createZone(

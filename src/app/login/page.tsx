@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Truck, Loader } from 'lucide-react';
+/* eslint-disable @next/next/no-img-element */
+import { Loader } from 'lucide-react';
 
 export default function LoginPage() {
     const router = useRouter();
@@ -36,15 +37,18 @@ export default function LoginPage() {
     }
 
     return (
-        <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-4">
-            <div className="w-full max-w-sm">
+        <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-4 relative overflow-hidden">
+            {/* Subtle background glow */}
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-violet-900/10 rounded-full blur-3xl pointer-events-none" />
+            <div className="w-full max-w-sm relative z-10">
                 {/* Logo */}
                 <div className="flex flex-col items-center mb-8">
-                    <div className="w-14 h-14 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl flex items-center justify-center mb-4">
-                        <Truck className="w-7 h-7 text-emerald-400" />
-                    </div>
-                    <h1 className="text-2xl font-bold text-white">Logistics</h1>
-                    <p className="text-zinc-500 text-sm mt-1">Distribution Tool</p>
+                    <img
+                        src="/logo-white.png"
+                        alt="Shuda Logistics"
+                        className="logo-invertible w-64 h-auto mb-2"
+                    />
+                    <p className="text-zinc-500 text-sm">Distribution Management System</p>
                 </div>
 
                 {/* Card */}
@@ -60,10 +64,10 @@ export default function LoginPage() {
                                 type="text"
                                 value={username}
                                 onChange={e => setUsername(e.target.value)}
-                                placeholder="shudalogistics"
+                                placeholder="Username"
                                 autoComplete="username"
                                 required
-                                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/20 transition-colors"
+                                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20 transition-colors"
                             />
                         </div>
 
@@ -78,7 +82,7 @@ export default function LoginPage() {
                                 placeholder="••••••••"
                                 autoComplete="current-password"
                                 required
-                                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/20 transition-colors"
+                                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20 transition-colors"
                             />
                         </div>
 
@@ -91,7 +95,7 @@ export default function LoginPage() {
                         <button
                             type="submit"
                             disabled={loading}
-                            className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium text-sm rounded-lg py-2.5 transition-colors flex items-center justify-center gap-2"
+                            className="w-full bg-violet-600 hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium text-sm rounded-lg py-2.5 transition-colors flex items-center justify-center gap-2"
                         >
                             {loading ? (
                                 <>

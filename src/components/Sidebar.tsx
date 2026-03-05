@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+/* eslint-disable @next/next/no-img-element */
 import { usePathname, useRouter } from 'next/navigation';
 import {
     LayoutDashboard,
@@ -8,7 +9,6 @@ import {
     Truck,
     Settings,
     ScrollText,
-    Package,
     MessageSquare,
     Database,
     Clock,
@@ -41,18 +41,16 @@ export default function Sidebar() {
     }
 
     return (
-        <aside className="fixed left-0 top-0 h-full w-64 bg-zinc-900 border-r border-zinc-800 flex flex-col">
+        <aside className="fixed left-0 top-0 h-full w-64 bg-zinc-900 border-r border-zinc-800/80 flex flex-col">
             {/* Logo */}
-            <div className="p-6 border-b border-zinc-800">
-                <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
-                        <Package className="w-6 h-6 text-white" />
-                    </div>
-                    <div>
-                        <h1 className="text-lg font-bold text-white">Logistics</h1>
-                        <p className="text-xs text-zinc-500">Distribution Tool</p>
-                    </div>
-                </div>
+            <div className="px-5 py-5 border-b border-zinc-800">
+                <Link href="/" className="block">
+                    <img
+                        src="/logo-white.png"
+                        alt="Shuda Logistics"
+                        className="logo-invertible w-full h-auto opacity-90 hover:opacity-100 transition-opacity"
+                    />
+                </Link>
             </div>
 
             {/* Navigation */}
@@ -66,7 +64,7 @@ export default function Sidebar() {
                             key={item.href}
                             href={item.href}
                             className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 border ${isActive
-                                    ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                                    ? 'bg-violet-500/15 text-violet-300 border-violet-500/25'
                                     : 'border-transparent text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
                                 }`}
                         >
@@ -87,7 +85,7 @@ export default function Sidebar() {
                     <span className="text-sm font-medium">Logout</span>
                 </button>
                 <p className="text-xs text-zinc-600 text-center">
-                    Logistics Distribution v3.0
+                    Shuda Logistics v3.0
                 </p>
             </div>
         </aside>

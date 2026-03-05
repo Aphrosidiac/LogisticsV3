@@ -19,14 +19,7 @@ import {
 } from '@/lib/balances';
 import type { PendingBalance } from '@/types';
 import Modal from '@/components/Modal';
-
-function formatDate(dateStr: string): string {
-  if (!dateStr) return dateStr;
-  // Convert YYYY-MM-DD to DD/MM/YYYY
-  const parts = dateStr.split('-');
-  if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
-  return dateStr;
-}
+import { formatDisplayDate, getStatusColor as getStatusColorUtil } from '@/lib/utils';
 
 export default function BalancesPage() {
   const [balances, setBalances] = useState<PendingBalance[]>([]);
@@ -217,7 +210,7 @@ export default function BalancesPage() {
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
                     <Calendar className="w-4 h-4 text-zinc-400" />
-                    <span className="font-medium text-white">{formatDate(stat.date)}</span>
+                    <span className="font-medium text-white">{formatDisplayDate(stat.date)}</span>
                   </div>
                   <p className="text-sm text-zinc-400 mt-1">
                     Zones: {stat.zones.join(', ')}
@@ -263,7 +256,7 @@ export default function BalancesPage() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Calendar className="w-5 h-5 text-emerald-400" />
-                      <h3 className="text-lg font-semibold text-white">{formatDate(date)}</h3>
+                      <h3 className="text-lg font-semibold text-white">{formatDisplayDate(date)}</h3>
                     </div>
                     <span className="text-sm text-zinc-400">
                       {dateBalances.length} balance{dateBalances.length > 1 ? 's' : ''}
@@ -300,7 +293,7 @@ export default function BalancesPage() {
 
                             <div>
                               <p className="text-zinc-500">Original Date</p>
-                              <p className="font-medium text-zinc-200">{formatDate(balance.original_date)}</p>
+                              <p className="font-medium text-zinc-200">{formatDisplayDate(balance.original_date)}</p>
                             </div>
 
                             {balance.pickup && (
@@ -393,7 +386,7 @@ export default function BalancesPage() {
                   {selectedBalance.remaining_quantity} pallets
                 </p>
                 <p className="text-sm text-zinc-500">
-                  Currently scheduled: <span className="text-zinc-300">{formatDate(selectedBalance.scheduled_for_date)}</span>
+                  Currently scheduled: <span className="text-zinc-300">{formatDisplayDate(selectedBalance.scheduled_for_date)}</span>
                 </p>
               </div>
             </div>

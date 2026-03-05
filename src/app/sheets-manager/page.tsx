@@ -22,6 +22,8 @@ import {
     Paperclip,
     FileText,
     Eye,
+    Clock,
+    ArrowRight,
 } from 'lucide-react';
 import DOViewerModal from '@/components/DOViewerModal';
 import ZoneDistrictSelector from '@/components/ZoneDistrictSelector';
@@ -30,143 +32,20 @@ import { useApp } from '@/context/AppContext';
 import * as db from '@/lib/db-supabase';
 import * as csv from '@/lib/csv';
 import type { Order, Driver } from '@/types';
-import { generateId } from '@/lib/utils';
-
-// ── Column definitions ────────────────────────────────────────────────────────
-
-interface ColDef {
-    key: string;
-    label: string;
-    shortLabel?: string;
-    type: 'text' | 'number' | 'date' | 'select' | 'tel';
-    required?: boolean;
-    min?: number;
-    max?: number;
-    step?: number;
-    defaultValue?: any;
-    options?: { value: string; label: string }[];
-    placeholder?: string;
-    hint?: string;
-}
-
-const ORDER_COLS: ColDef[] = [
-    {
-        key: 'do_number', label: 'DO Number', type: 'text',
-        placeholder: 'e.g. DO-2025-001', hint: 'Delivery order reference number',
-    },
-    {
-        key: 'invoice_number', label: 'Invoice Number', shortLabel: 'Invoice #', type: 'text',
-        placeholder: 'e.g. INV-001',
-    },
-    {
-        key: 'date', label: 'Delivery Date', type: 'date', required: true,
-        hint: 'Date the delivery should be completed',
-    },
-    {
-        key: 'zone', label: 'Zone', type: 'text', required: true,
-        placeholder: 'e.g. A, B1, North', hint: 'Delivery zone for routing',
-    },
-    {
-        key: 'pickup', label: 'Pickup Location', shortLabel: 'Pickup', type: 'text',
-        placeholder: 'Warehouse / origin address',
-    },
-    {
-        key: 'delivery', label: 'Delivery Location', shortLabel: 'Delivery', type: 'text',
-        placeholder: 'Customer / destination address',
-    },
-    {
-        key: 'pallets', label: 'Pallets', type: 'number', required: true,
-        min: 1, max: 99, step: 1, placeholder: '1',
-        hint: 'Number of pallets (whole number, 1–99)',
-    },
-    {
-        key: 'ctn_amount', label: 'CTN Amount', shortLabel: 'CTN', type: 'number',
-        min: 0, step: 1, placeholder: '0',
-        hint: 'Number of cartons (used with CTN/Pallet ratio for conversion)',
-    },
-    {
-        key: 'ctn_to_pallet_ratio', label: 'CTN per Pallet', shortLabel: 'CTN Ratio', type: 'number',
-        min: 1, step: 1, placeholder: '—',
-        hint: 'How many cartons equal one pallet (e.g. 40 means 40 CTN = 1 pallet)',
-    },
-    {
-        key: 'priority', label: 'Priority', type: 'select',
-        defaultValue: 'standard',
-        options: [
-            { value: 'standard', label: 'Standard' },
-            { value: 'high', label: 'High Priority' },
-        ],
-    },
-    {
-        key: 'status', label: 'Status', type: 'select',
-        defaultValue: 'pending',
-        options: [
-            { value: 'pending', label: 'Pending' },
-            { value: 'assigned', label: 'Assigned' },
-            { value: 'completed', label: 'Completed' },
-        ],
-    },
-];
-
-const DRIVER_COLS: ColDef[] = [
-    {
-        key: 'name', label: 'Full Name', shortLabel: 'Name', type: 'text', required: true,
-        placeholder: 'Driver full name',
-    },
-    {
-        key: 'identifier', label: 'Vehicle / Plate No.', shortLabel: 'Vehicle', type: 'text', required: true,
-        placeholder: 'e.g. WXX 1234 or Lorry 1',
-    },
-    {
-        key: 'phone', label: 'Phone (WhatsApp)', shortLabel: 'Phone', type: 'tel',
-        placeholder: '60123456789',
-        hint: 'Include country code, digits only. Used for automated WhatsApp dispatch.',
-    },
-    {
-        key: 'home_region', label: 'Home Region / Zone', shortLabel: 'Region', type: 'text',
-        placeholder: 'e.g. A, North, Subang',
-        hint: 'Preferred delivery zone — improves routing score',
-    },
-    {
-        key: 'max_capacity', label: 'Max Capacity (Pallets)', shortLabel: 'Max Cap.', type: 'number',
-        required: true, min: 1, max: 50, step: 1, defaultValue: 11, placeholder: '11',
-        hint: 'Maximum number of pallets this driver can carry per trip',
-    },
-];
+import { generateId, formatDisplayDate } from '@/lib/utils';
+import { ORDER_COLS, DRIVER_COLS, PRIORITY_STYLE, STATUS_STYLE, STATUS_ROW_ACCENT, type ColDef } from '@/lib/column-defs';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function toDisplayDate(isoDate?: string | null): string {
     if (!isoDate) return '—';
-    const parts = String(isoDate).split('T')[0].split('-');
-    if (parts.length !== 3) return isoDate;
-    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    const clean = String(isoDate).split('T')[0];
+    return formatDisplayDate(clean) || isoDate;
 }
 
 function cleanPhone(phone: string): string {
     return phone.replace(/\D/g, '');
 }
-
-const PRIORITY_STYLE: Record<string, string> = {
-    high: 'bg-rose-500/10 text-rose-400 border border-rose-500/30',
-    standard: 'bg-zinc-800 text-zinc-500 border border-zinc-700/80',
-};
-
-const STATUS_STYLE: Record<string, string> = {
-    pending:     'bg-amber-500/10 text-amber-400 border border-amber-500/25',
-    assigned:    'bg-blue-500/10 text-blue-300 border border-blue-500/25',
-    in_progress: 'bg-purple-500/10 text-purple-400 border border-purple-500/25',
-    completed:   'bg-emerald-500/10 text-emerald-400 border border-emerald-500/25',
-    cancelled:   'bg-zinc-700/40 text-zinc-500 border border-zinc-700/60',
-};
-
-const STATUS_ROW_ACCENT: Record<string, string> = {
-    pending:     'border-l-[3px] border-l-amber-500/50',
-    assigned:    'border-l-[3px] border-l-blue-500/50',
-    in_progress: 'border-l-[3px] border-l-purple-500/50',
-    completed:   'border-l-[3px] border-l-emerald-500/50',
-    cancelled:   'border-l-[3px] border-l-zinc-600/40',
-};
 
 function Badge({ value, styleMap, labels }: {
     value?: string;
@@ -283,9 +162,10 @@ function downloadCSV(filename: string, content: string) {
 
 export default function DatabaseManagerPage() {
     const { addLog, dispatch } = useApp();
-    const [activeTab, setActiveTab] = useState<'orders' | 'drivers'>('orders');
+    const [activeTab, setActiveTab] = useState<'orders' | 'drivers' | 'holding'>('orders');
     const [orders, setOrders] = useState<Order[]>([]);
     const [drivers, setDrivers] = useState<Driver[]>([]);
+    const [holdingOrders, setHoldingOrders] = useState<Order[]>([]);
     const [loading, setLoading] = useState(true);
 
 
@@ -303,6 +183,10 @@ export default function DatabaseManagerPage() {
 
     // DO viewer modal
     const [viewingDO, setViewingDO] = useState<{ url: string; filename: string } | null>(null);
+
+    // Holding modals
+    const [holdingModal, setHoldingModal] = useState<{ mode: 'add' | 'edit'; data: Partial<Order> } | null>(null);
+    const [releaseModal, setReleaseModal] = useState<{ order: Order } | null>(null);
 
     // Order filters & sort
     const [orderSearch, setOrderSearch] = useState('');
@@ -403,9 +287,10 @@ export default function DatabaseManagerPage() {
     async function loadAll() {
         setLoading(true);
         try {
-            const [o, d] = await Promise.all([db.getAllOrders(), db.getAllDrivers()]);
+            const [o, d, h] = await Promise.all([db.getAllOrders(), db.getAllDrivers(), db.getHoldingOrders()]);
             setOrders(o);
             setDrivers(d);
+            setHoldingOrders(h);
             dispatch({ type: 'SET_ORDERS', payload: o });
             dispatch({ type: 'SET_DRIVERS', payload: d });
         } catch (err: any) {
@@ -606,6 +491,61 @@ export default function DatabaseManagerPage() {
         }
     }
 
+    // ── Holding Order CRUD ─────────────────────────────────────────────────
+
+    async function handleSaveHoldingOrder(data: Partial<Order>) {
+        setSaving(true);
+        try {
+            if (holdingModal?.mode === 'add') {
+                const created = await db.addHoldingOrder(data);
+                setHoldingOrders(prev => [created, ...prev]);
+                addLog('success', 'Holding order added');
+            } else if (holdingModal?.mode === 'edit' && data.id) {
+                await db.updateOrder(data.id, data);
+                setHoldingOrders(prev => prev.map(o => o.id === data.id ? { ...o, ...data } as Order : o));
+                addLog('success', 'Holding order updated');
+            }
+            setHoldingModal(null);
+        } catch (err: any) {
+            addLog('error', 'Failed to save holding order', err.message);
+        } finally {
+            setSaving(false);
+        }
+    }
+
+    async function handleReleaseHoldingOrder(updates: { date: string; zone: string; zone_id?: string; district_id?: string; delivery?: string; pickup?: string }) {
+        if (!releaseModal) return;
+        setSaving(true);
+        try {
+            await db.releaseHoldingOrder(releaseModal.order.id, updates);
+            setHoldingOrders(prev => prev.filter(o => o.id !== releaseModal.order.id));
+            // Reload orders to include the newly-released order
+            const allOrders = await db.getAllOrders();
+            setOrders(allOrders);
+            dispatch({ type: 'SET_ORDERS', payload: allOrders });
+            addLog('success', `Order released to pending — ${updates.date}`);
+            setReleaseModal(null);
+        } catch (err: any) {
+            addLog('error', 'Failed to release holding order', err.message);
+        } finally {
+            setSaving(false);
+        }
+    }
+
+    async function handleDeleteHoldingOrder(id: string) {
+        setDeletingId(id);
+        try {
+            await db.deleteOrder(id);
+            setHoldingOrders(prev => prev.filter(o => o.id !== id));
+            addLog('success', 'Holding order deleted');
+        } catch (err: any) {
+            addLog('error', 'Failed to delete holding order', err.message);
+        } finally {
+            setDeletingId(null);
+            setConfirmDeleteOrderId(null);
+        }
+    }
+
     if (loading) {
         return (
             <div className="flex items-center justify-center h-64">
@@ -630,6 +570,7 @@ export default function DatabaseManagerPage() {
                 {([
                     { key: 'orders', label: 'Orders', count: orders.length, Icon: Package },
                     { key: 'drivers', label: 'Drivers', count: drivers.length, Icon: Users },
+                    { key: 'holding', label: 'Holding', count: holdingOrders.length, Icon: Clock },
                 ] as const).map(({ key, label, count, Icon }) => (
                     <button
                         key={key}
@@ -1123,6 +1064,110 @@ export default function DatabaseManagerPage() {
                 </div>
             )}
 
+            {/* Holding tab */}
+            {activeTab === 'holding' && (
+                <div className="card">
+                    <div className="px-5 py-4 border-b border-zinc-800 flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                            <h2 className="text-base font-semibold text-white">Holding Orders</h2>
+                            <p className="text-xs text-zinc-600 mt-0.5">
+                                Orders awaiting delivery details — release them to pending when date &amp; zone are confirmed
+                            </p>
+                        </div>
+                        <button
+                            onClick={() => setHoldingModal({ mode: 'add', data: { priority: 'standard' } })}
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-orange-600 hover:bg-orange-500 rounded-lg transition-all shadow-sm shadow-orange-900/50"
+                        >
+                            <Plus className="w-3.5 h-3.5" /> Add Holding Order
+                        </button>
+                    </div>
+
+                    {holdingOrders.length === 0 ? (
+                        <div className="p-12 text-center">
+                            <Clock className="w-12 h-12 text-zinc-700 mx-auto mb-3" />
+                            <p className="text-zinc-500">No holding orders.</p>
+                            <p className="text-zinc-600 text-xs mt-1">Add orders here when a customer has ordered but hasn&apos;t provided delivery details yet.</p>
+                        </div>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <table className="w-full border-collapse text-sm">
+                                <thead>
+                                    <tr className="border-b border-zinc-800 bg-zinc-900/80">
+                                        <th className="pl-4 pr-2 py-3 text-left text-[10px] font-semibold text-zinc-500 uppercase tracking-wider w-8">#</th>
+                                        <th className="px-3 py-3 text-left text-[10px] font-semibold text-zinc-500 uppercase tracking-wider whitespace-nowrap">DO #</th>
+                                        <th className="px-3 py-3 text-left text-[10px] font-semibold text-zinc-500 uppercase tracking-wider whitespace-nowrap">Invoice</th>
+                                        <th className="px-3 py-3 text-left text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Pallets</th>
+                                        <th className="px-3 py-3 text-left text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">CTN</th>
+                                        <th className="px-3 py-3 text-left text-[10px] font-semibold text-zinc-500 uppercase tracking-wider whitespace-nowrap">Pickup</th>
+                                        <th className="px-3 py-3 text-left text-[10px] font-semibold text-zinc-500 uppercase tracking-wider whitespace-nowrap">Delivery</th>
+                                        <th className="px-3 py-3 text-left text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Date</th>
+                                        <th className="px-3 py-3 text-left text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Zone</th>
+                                        <th className="px-3 py-3 text-left text-[10px] font-semibold text-zinc-500 uppercase tracking-wider w-36">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {holdingOrders.map((order, i) => (
+                                        <tr key={order.id} className="border-b border-zinc-800/50 hover:bg-zinc-800/40 transition-colors group h-[44px] border-l-[3px] border-l-orange-500/50">
+                                            <td className="pl-4 pr-2 py-3 text-[10px] text-zinc-600 font-mono">{i + 1}</td>
+                                            <td className="px-3 py-3 text-zinc-400 font-mono text-xs">{order.do_number || <span className="text-zinc-700">—</span>}</td>
+                                            <td className="px-3 py-3 text-zinc-400 font-mono text-xs">{order.invoice_number || <span className="text-zinc-700">—</span>}</td>
+                                            <td className="px-3 py-3 text-zinc-200 font-semibold text-sm text-center tabular-nums">{order.pallets ?? <span className="text-zinc-700">—</span>}</td>
+                                            <td className="px-3 py-3 text-zinc-400 text-xs tabular-nums">{order.ctn_amount || <span className="text-zinc-700">—</span>}</td>
+                                            <td className="px-3 py-3 text-zinc-500 text-xs max-w-[140px] truncate">{order.pickup || <span className="text-zinc-700">—</span>}</td>
+                                            <td className="px-3 py-3 text-zinc-500 text-xs max-w-[140px] truncate">{order.delivery || <span className="text-zinc-700">—</span>}</td>
+                                            <td className="px-3 py-3 text-zinc-500 text-xs">{order.date ? toDisplayDate(order.date) : <span className="text-zinc-700 italic">not set</span>}</td>
+                                            <td className="px-3 py-3 text-zinc-500 text-xs">{order.zone || <span className="text-zinc-700 italic">not set</span>}</td>
+                                            <td className="w-[160px] px-3 py-3">
+                                                <div className="grid">
+                                                    <div className={`row-start-1 col-start-1 flex items-center gap-1 transition-opacity duration-150 ${confirmDeleteOrderId === order.id ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
+                                                        <button
+                                                            onClick={() => handleDeleteHoldingOrder(order.id)}
+                                                            disabled={deletingId === order.id}
+                                                            className="px-2 py-1 text-[10px] font-semibold bg-rose-500/15 text-rose-400 border border-rose-500/25 rounded-md hover:bg-rose-500/25 transition-colors"
+                                                        >
+                                                            {deletingId === order.id ? '…' : 'Delete'}
+                                                        </button>
+                                                        <button
+                                                            onClick={() => setConfirmDeleteOrderId(null)}
+                                                            className="px-2 py-1 text-[10px] font-semibold bg-zinc-800 text-zinc-400 border border-zinc-700 rounded-md hover:bg-zinc-700 transition-colors"
+                                                        >
+                                                            Cancel
+                                                        </button>
+                                                    </div>
+                                                    <div className={`row-start-1 col-start-1 flex items-center gap-1 transition-opacity duration-150 ${confirmDeleteOrderId === order.id ? 'opacity-0 pointer-events-none' : 'opacity-0 group-hover:opacity-100'}`}>
+                                                        <button
+                                                            onClick={() => setReleaseModal({ order })}
+                                                            className="flex items-center gap-1 px-2 py-1 text-[10px] font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/25 rounded-md hover:bg-emerald-500/25 transition-colors"
+                                                            title="Release to pending"
+                                                        >
+                                                            <ArrowRight className="w-3 h-3" /> Release
+                                                        </button>
+                                                        <button
+                                                            onClick={() => setHoldingModal({ mode: 'edit', data: { ...order } })}
+                                                            className="p-1.5 text-zinc-500 hover:text-zinc-100 hover:bg-zinc-700 rounded-md transition-colors"
+                                                            title="Edit"
+                                                        >
+                                                            <Edit2 className="w-3.5 h-3.5" />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => setConfirmDeleteOrderId(order.id)}
+                                                            className="p-1.5 text-zinc-600 hover:text-rose-400 hover:bg-rose-500/10 rounded-md transition-colors"
+                                                            title="Delete"
+                                                        >
+                                                            <Trash2 className="w-3.5 h-3.5" />
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
+            )}
+
             {/* Order Modal */}
             {orderModal && (
                 <FormModal
@@ -1158,6 +1203,36 @@ export default function DatabaseManagerPage() {
                         saving={saving}
                         onSave={handleSaveDriver}
                         onCancel={() => setDriverModal(null)}
+                    />
+                </FormModal>
+            )}
+
+            {/* Holding Order Modal */}
+            {holdingModal && (
+                <FormModal
+                    title={holdingModal.mode === 'add' ? 'Add Holding Order' : 'Edit Holding Order'}
+                    onClose={() => setHoldingModal(null)}
+                >
+                    <HoldingOrderForm
+                        initial={holdingModal.data}
+                        saving={saving}
+                        onSave={handleSaveHoldingOrder}
+                        onCancel={() => setHoldingModal(null)}
+                    />
+                </FormModal>
+            )}
+
+            {/* Release Modal */}
+            {releaseModal && (
+                <FormModal
+                    title={`Release Order${releaseModal.order.do_number ? ` — ${releaseModal.order.do_number}` : ''}`}
+                    onClose={() => setReleaseModal(null)}
+                >
+                    <ReleaseForm
+                        order={releaseModal.order}
+                        saving={saving}
+                        onRelease={handleReleaseHoldingOrder}
+                        onCancel={() => setReleaseModal(null)}
                     />
                 </FormModal>
             )}
@@ -1471,6 +1546,222 @@ function DriverForm({ initial, saving, onSave, onCancel }: {
                 <button type="submit" disabled={saving} className="btn-primary flex items-center gap-2 flex-1">
                     {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
                     {saving ? 'Saving…' : 'Save Driver'}
+                </button>
+                <button type="button" onClick={onCancel} className="btn-secondary flex-1">Cancel</button>
+            </div>
+        </form>
+    );
+}
+
+// ── Holding Order Form ───────────────────────────────────────────────────────
+
+function validateHoldingOrder(data: Partial<Order>): Record<string, string> {
+    const e: Record<string, string> = {};
+    const pallets = Number(data.pallets);
+    if (data.pallets === undefined || data.pallets === null || String(data.pallets) === '') {
+        e.pallets = 'Pallets is required';
+    } else if (isNaN(pallets) || pallets < 1 || pallets > 99) {
+        e.pallets = 'Must be a whole number between 1 and 99';
+    } else if (!Number.isInteger(pallets)) {
+        e.pallets = 'Must be a whole number (no decimals)';
+    }
+    if (data.ctn_amount !== undefined && data.ctn_amount !== null && String(data.ctn_amount) !== '') {
+        const ctn = Number(data.ctn_amount);
+        if (isNaN(ctn) || ctn < 0) e.ctn_amount = 'Must be 0 or greater';
+        else if (!Number.isInteger(ctn)) e.ctn_amount = 'Must be a whole number';
+    }
+    return e;
+}
+
+function HoldingOrderForm({ initial, saving, onSave, onCancel }: {
+    initial: Partial<Order>;
+    saving: boolean;
+    onSave: (data: Partial<Order>) => void;
+    onCancel: () => void;
+}) {
+    const [data, setData] = useState<Partial<Order>>(initial);
+    const [errors, setErrors] = useState<Record<string, string>>({});
+    const [touched, setTouched] = useState<Record<string, boolean>>({});
+    const { cache } = useApp();
+    const zones = cache.zones || [];
+
+    function set(key: string, value: any) {
+        setData(prev => ({ ...prev, [key]: value }));
+        if (errors[key]) setErrors(prev => { const n = { ...prev }; delete n[key]; return n; });
+        setTouched(prev => ({ ...prev, [key]: true }));
+    }
+
+    function handleZoneSelect(val: { zone_id: string; district_id: string } | null) {
+        if (!val) {
+            setData(prev => ({ ...prev, zone_id: undefined, district_id: undefined, zone: '' }));
+        } else {
+            const z = zones.find(z => z.id === val.zone_id);
+            const d = z?.districts.find(d => d.id === val.district_id);
+            const zoneText = z && d ? `${z.name} - ${d.name}` : (z?.name || '');
+            setData(prev => ({ ...prev, zone_id: val.zone_id, district_id: val.district_id, zone: zoneText }));
+        }
+    }
+
+    function handleSubmit(e: React.FormEvent) {
+        e.preventDefault();
+        const errs = validateHoldingOrder(data);
+        if (Object.keys(errs).length > 0) {
+            setErrors(errs);
+            const t: Record<string, boolean> = {};
+            Object.keys(errs).forEach(k => { t[k] = true; });
+            setTouched(prev => ({ ...prev, ...t }));
+            return;
+        }
+        onSave({
+            ...data,
+            pallets: Number(data.pallets),
+            ctn_amount: data.ctn_amount !== undefined && String(data.ctn_amount) !== '' ? Number(data.ctn_amount) : undefined,
+            ctn_to_pallet_ratio: data.ctn_to_pallet_ratio !== undefined && String(data.ctn_to_pallet_ratio) !== '' ? Number(data.ctn_to_pallet_ratio) : undefined,
+        });
+    }
+
+    return (
+        <form onSubmit={handleSubmit} className="space-y-5">
+            <div className="px-3 py-2 bg-orange-500/10 border border-orange-500/20 rounded-lg text-xs text-orange-300">
+                Only <strong>Pallets</strong> is required. Fill in date, zone, and delivery later when the customer confirms.
+            </div>
+
+            <fieldset className="space-y-3">
+                <legend className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">Order Info</legend>
+                <div className="grid grid-cols-2 gap-3">
+                    <FormField col={ORDER_COLS.find(c => c.key === 'do_number')!} value={data.do_number} error={touched.do_number ? errors.do_number : undefined} onChange={v => set('do_number', v)} />
+                    <FormField col={ORDER_COLS.find(c => c.key === 'invoice_number')!} value={data.invoice_number} error={touched.invoice_number ? errors.invoice_number : undefined} onChange={v => set('invoice_number', v)} />
+                </div>
+            </fieldset>
+
+            <fieldset className="space-y-3">
+                <legend className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">Quantities</legend>
+                <div className="grid grid-cols-3 gap-3">
+                    <FormField col={ORDER_COLS.find(c => c.key === 'pallets')!} value={data.pallets} error={touched.pallets ? errors.pallets : undefined} onChange={v => set('pallets', v)} />
+                    <FormField col={ORDER_COLS.find(c => c.key === 'ctn_amount')!} value={data.ctn_amount} error={touched.ctn_amount ? errors.ctn_amount : undefined} onChange={v => set('ctn_amount', v)} />
+                    <FormField col={ORDER_COLS.find(c => c.key === 'ctn_to_pallet_ratio')!} value={data.ctn_to_pallet_ratio} error={touched.ctn_to_pallet_ratio ? errors.ctn_to_pallet_ratio : undefined} onChange={v => set('ctn_to_pallet_ratio', v)} />
+                </div>
+            </fieldset>
+
+            <fieldset className="space-y-3">
+                <legend className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">Delivery Details (optional)</legend>
+                <FormField col={ORDER_COLS.find(c => c.key === 'date')!} value={data.date} error={touched.date ? errors.date : undefined} onChange={v => set('date', v)} />
+                <ZoneDistrictSelector
+                    value={{ zone_id: data.zone_id, district_id: data.district_id }}
+                    onChange={handleZoneSelect}
+                    zones={zones}
+                />
+                <div className="grid grid-cols-2 gap-3">
+                    <FormField col={ORDER_COLS.find(c => c.key === 'pickup')!} value={data.pickup} error={touched.pickup ? errors.pickup : undefined} onChange={v => set('pickup', v)} />
+                    <FormField col={ORDER_COLS.find(c => c.key === 'delivery')!} value={data.delivery} error={touched.delivery ? errors.delivery : undefined} onChange={v => set('delivery', v)} />
+                </div>
+            </fieldset>
+
+            <div className="flex gap-3 pt-4 border-t border-zinc-800 mt-2">
+                <button type="submit" disabled={saving} className="btn-primary flex items-center gap-2 flex-1" style={{ backgroundColor: saving ? undefined : 'rgb(234 88 12)' }}>
+                    {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                    {saving ? 'Saving…' : 'Save Holding Order'}
+                </button>
+                <button type="button" onClick={onCancel} className="btn-secondary flex-1">Cancel</button>
+            </div>
+        </form>
+    );
+}
+
+// ── Release Form ─────────────────────────────────────────────────────────────
+
+function ReleaseForm({ order, saving, onRelease, onCancel }: {
+    order: Order;
+    saving: boolean;
+    onRelease: (updates: { date: string; zone: string; zone_id?: string; district_id?: string; delivery?: string; pickup?: string }) => void;
+    onCancel: () => void;
+}) {
+    const [date, setDate] = useState(order.date || '');
+    const [zone, setZone] = useState(order.zone || '');
+    const [zoneId, setZoneId] = useState(order.zone_id);
+    const [districtId, setDistrictId] = useState(order.district_id);
+    const [pickup, setPickup] = useState(order.pickup || '');
+    const [delivery, setDelivery] = useState(order.delivery || '');
+    const [errors, setErrors] = useState<Record<string, string>>({});
+    const { cache } = useApp();
+    const zones = cache.zones || [];
+
+    function handleZoneSelect(val: { zone_id: string; district_id: string } | null) {
+        if (!val) {
+            setZoneId(undefined);
+            setDistrictId(undefined);
+            setZone('');
+        } else {
+            setZoneId(val.zone_id);
+            setDistrictId(val.district_id);
+            const z = zones.find(z => z.id === val.zone_id);
+            const d = z?.districts.find(d => d.id === val.district_id);
+            setZone(z && d ? `${z.name} - ${d.name}` : (z?.name || ''));
+        }
+        if (errors.zone) setErrors(prev => { const n = { ...prev }; delete n.zone; return n; });
+    }
+
+    function handleSubmit(e: React.FormEvent) {
+        e.preventDefault();
+        const errs: Record<string, string> = {};
+        if (!date) errs.date = 'Delivery date is required to release';
+        if (!zone.trim()) errs.zone = 'Zone is required to release';
+        if (Object.keys(errs).length > 0) { setErrors(errs); return; }
+        onRelease({ date, zone, zone_id: zoneId, district_id: districtId, delivery: delivery || undefined, pickup: pickup || undefined });
+    }
+
+    return (
+        <form onSubmit={handleSubmit} className="space-y-5">
+            <div className="px-3 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg text-xs text-emerald-300">
+                Releasing moves this order to <strong>pending</strong> status. It will then be available for distribution.
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 text-xs text-zinc-400">
+                <div>Pallets: <span className="text-zinc-200 font-semibold">{order.pallets}</span></div>
+                {order.do_number && <div>DO#: <span className="text-zinc-200 font-mono">{order.do_number}</span></div>}
+            </div>
+
+            <fieldset className="space-y-3">
+                <legend className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">Required for Release</legend>
+                <div>
+                    <label className="text-xs font-medium text-zinc-300">Delivery Date <span className="text-rose-400">*</span></label>
+                    <input
+                        type="date"
+                        value={date}
+                        onChange={e => { setDate(e.target.value); if (errors.date) setErrors(prev => { const n = { ...prev }; delete n.date; return n; }); }}
+                        className={`w-full px-3 py-2 bg-zinc-800 border rounded-lg text-zinc-200 text-sm focus:outline-none focus:ring-1 transition-colors ${errors.date ? 'border-rose-500/70 focus:border-rose-500 focus:ring-rose-500/30' : 'border-zinc-700 focus:border-emerald-500 focus:ring-emerald-500/30'}`}
+                    />
+                    {errors.date && <p className="text-xs text-rose-400 mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{errors.date}</p>}
+                </div>
+                <div>
+                    <ZoneDistrictSelector
+                        value={{ zone_id: zoneId, district_id: districtId }}
+                        onChange={handleZoneSelect}
+                        zones={zones}
+                        required
+                    />
+                    {errors.zone && <p className="text-xs text-rose-400 mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{errors.zone}</p>}
+                </div>
+            </fieldset>
+
+            <fieldset className="space-y-3">
+                <legend className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">Route (optional)</legend>
+                <div className="grid grid-cols-2 gap-3">
+                    <div>
+                        <label className="text-xs font-medium text-zinc-300">Pickup</label>
+                        <input type="text" value={pickup} onChange={e => setPickup(e.target.value)} placeholder="Warehouse / origin" className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-zinc-200 text-sm focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30" />
+                    </div>
+                    <div>
+                        <label className="text-xs font-medium text-zinc-300">Delivery</label>
+                        <input type="text" value={delivery} onChange={e => setDelivery(e.target.value)} placeholder="Customer / destination" className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-zinc-200 text-sm focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30" />
+                    </div>
+                </div>
+            </fieldset>
+
+            <div className="flex gap-3 pt-4 border-t border-zinc-800 mt-2">
+                <button type="submit" disabled={saving} className="btn-primary flex items-center gap-2 flex-1">
+                    {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <ArrowRight className="w-4 h-4" />}
+                    {saving ? 'Releasing…' : 'Release to Pending'}
                 </button>
                 <button type="button" onClick={onCancel} className="btn-secondary flex-1">Cancel</button>
             </div>

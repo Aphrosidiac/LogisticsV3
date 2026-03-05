@@ -1,0 +1,331 @@
+// Order operations
+import { supabase, TABLES } from './supabase';
+import type { Order } from '@/types';
+import { getZonesByIds, getDistrictsByIds } from './db-zones';
+import { generateId } from './utils';
+
+export async function saveOrders(orders: Order[], sheetId?: string) {
+  try {
+    // Batch-fetch all referenced zones and districts in 2 queries (not N+1)
+    const zoneIds = orders.map(o => o.zone_id).filter(Boolean) as string[];
+    const districtIds = orders.map(o => o.district_id).filter(Boolean) as string[];
+    const [zonesMap, districtsMap] = await Promise.all([
+      getZonesByIds(zoneIds),
+      getDistrictsByIds(districtIds),
+    ]);
+
+    const ordersToInsert = orders.map((order) => {
+      let zoneText = order.zone;
+
+      if (order.zone_id && order.district_id) {
+        const zone = zonesMap.get(order.zone_id);
+        const district = districtsMap.get(order.district_id);
+        if (zone && district) {
+          zoneText = `${zone.name} - ${district.name}`;
+        }
+      }
+
+      return {
+        id: order.id || generateId(),
+        sheet_id: sheetId,
+        zone: zoneText,
+        zone_id: order.zone_id,
+        district_id: order.district_id,
+        date: order.date || new Date().toISOString().split('T')[0],
+        priority: order.priority || 'standard',
+        ctn_amount: order.ctn_amount,
+        ctn_to_pallet_ratio: order.ctn_to_pallet_ratio,
+        pallets: order.pallets,
+        do_number: order.do_number,
+        invoice_number: order.invoice_number || order.invoice,
+        pickup: order.pickup,
+        delivery: order.delivery,
+        attachment_urls: order.attachment_urls || [],
+        raw_data: order.rawData || {},
+      };
+    });
+
+    const { error } = await supabase
+      .from(TABLES.ORDERS)
+      .upsert(ordersToInsert, { onConflict: 'id' });
+
+    if (error) throw error;
+  } catch (error) {
+    console.error('Error saving orders:', error);
+    throw error;
+  }
+}
+
+export async function getAllOrders(): Promise<Order[]> {
+  try {
+    const { data, error } = await supabase
+      .from(TABLES.ORDERS)
+      .select('*')
+      .order('date', { ascending: true });
+
+    if (error) throw error;
+
+    return (data || []).map((row) => ({
+      id: row.id,
+      zone: row.zone,
+      zone_id: row.zone_id,
+      district_id: row.district_id,
+      date: row.date,
+      priority: (row.priority as 'high' | 'standard') || 'standard',
+      status: (row.status as Order['status']) || 'pending',
+      ctn_amount: row.ctn_amount,
+      ctn_to_pallet_ratio: row.ctn_to_pallet_ratio,
+      pallets: row.pallets,
+      do_number: row.do_number,
+      invoice_number: row.invoice_number,
+      invoice: row.invoice_number,
+      pickup: row.pickup,
+      delivery: row.delivery,
+      attachment_urls: row.attachment_urls || [],
+      assigned_driver_id: row.assigned_driver_id || undefined,
+      rawData: row.raw_data || {},
+    }));
+  } catch (error) {
+    console.error('Error getting all orders:', error);
+    return [];
+  }
+}
+
+export async function clearOrders() {
+  try {
+    const { error } = await supabase
+      .from(TABLES.ORDERS)
+      .delete()
+      .neq('id', '00000000-0000-0000-0000-000000000000');
+    if (error) throw error;
+  } catch (error) {
+    console.error('Error clearing orders:', error);
+    throw error;
+  }
+}
+
+export async function addOrder(order: Partial<Order>): Promise<Order> {
+  try {
+    const id = generateId();
+    const row = {
+      id,
+      zone: order.zone || '',
+      zone_id: order.zone_id || null,
+      district_id: order.district_id || null,
+      date: order.date || new Date().toISOString().split('T')[0],
+      priority: order.priority || 'standard',
+      status: order.status || 'pending',
+      ctn_amount: order.ctn_amount ?? null,
+      ctn_to_pallet_ratio: order.ctn_to_pallet_ratio ?? null,
+      pallets: order.pallets || 0,
+      do_number: order.do_number || null,
+      invoice_number: order.invoice_number || null,
+      pickup: order.pickup || null,
+      delivery: order.delivery || null,
+      attachment_urls: [],
+      raw_data: {},
+    };
+
+    const { error } = await supabase.from(TABLES.ORDERS).insert(row);
+    if (error) throw error;
+
+    return { ...order, id, rawData: {} } as Order;
+  } catch (error) {
+    console.error('Error adding order:', error);
+    throw error;
+  }
+}
+
+export async function updateOrder(id: string, updates: Partial<Order>) {
+  try {
+    const payload: Record<string, any> = {};
+    if (updates.zone !== undefined) payload.zone = updates.zone;
+    if (updates.date !== undefined) payload.date = updates.date;
+    if (updates.priority !== undefined) payload.priority = updates.priority;
+    if (updates.status !== undefined) payload.status = updates.status;
+    if (updates.pallets !== undefined) payload.pallets = updates.pallets;
+    if (updates.ctn_amount !== undefined) payload.ctn_amount = updates.ctn_amount ?? null;
+    if (updates.ctn_to_pallet_ratio !== undefined) payload.ctn_to_pallet_ratio = updates.ctn_to_pallet_ratio ?? null;
+    if (updates.do_number !== undefined) payload.do_number = updates.do_number || null;
+    if (updates.invoice_number !== undefined) payload.invoice_number = updates.invoice_number || null;
+    if (updates.pickup !== undefined) payload.pickup = updates.pickup || null;
+    if (updates.delivery !== undefined) payload.delivery = updates.delivery || null;
+    if (updates.zone_id !== undefined) payload.zone_id = updates.zone_id || null;
+    if (updates.district_id !== undefined) payload.district_id = updates.district_id || null;
+    if (updates.attachment_urls !== undefined) payload.attachment_urls = updates.attachment_urls;
+
+    const { error } = await supabase.from(TABLES.ORDERS).update(payload).eq('id', id);
+    if (error) throw error;
+  } catch (error) {
+    console.error('Error updating order:', error);
+    throw error;
+  }
+}
+
+export async function deleteOrder(id: string) {
+  try {
+    const { error } = await supabase.from(TABLES.ORDERS).delete().eq('id', id);
+    if (error) throw error;
+  } catch (error) {
+    console.error('Error deleting order:', error);
+    throw error;
+  }
+}
+
+export async function updateOrdersToAssigned(
+  orderDriverMap: { orderId: string; driverId: string }[]
+): Promise<void> {
+  if (orderDriverMap.length === 0) return;
+  try {
+    const now = new Date().toISOString();
+    // Group by driver to minimize queries
+    const byDriver = new Map<string, string[]>();
+    for (const { orderId, driverId } of orderDriverMap) {
+      const list = byDriver.get(driverId) || [];
+      list.push(orderId);
+      byDriver.set(driverId, list);
+    }
+    await Promise.all(
+      Array.from(byDriver.entries()).map(([driverId, orderIds]) =>
+        supabase
+          .from(TABLES.ORDERS)
+          .update({ status: 'assigned', assigned_driver_id: driverId, updated_at: now })
+          .in('id', orderIds)
+      )
+    );
+  } catch (error) {
+    console.error('Error updating orders to assigned:', error);
+    throw error;
+  }
+}
+
+export async function getPendingOrderCountForDate(date: string): Promise<number> {
+  try {
+    const { count, error } = await supabase
+      .from(TABLES.ORDERS)
+      .select('id', { count: 'exact', head: true })
+      .eq('date', date)
+      .eq('status', 'pending');
+    if (error) throw error;
+    return count ?? 0;
+  } catch (error) {
+    console.error('Error getting pending order count:', error);
+    return 0;
+  }
+}
+
+export async function markOrdersAsCompleted(orderIds: string[], driverId?: string): Promise<void> {
+  if (orderIds.length === 0) return;
+  try {
+    const payload: Record<string, any> = {
+      status: 'completed',
+      updated_at: new Date().toISOString(),
+    };
+    if (driverId) payload.assigned_driver_id = driverId;
+
+    const { error } = await supabase
+      .from(TABLES.ORDERS)
+      .update(payload)
+      .in('id', orderIds);
+    if (error) throw error;
+  } catch (error) {
+    console.error('Error marking orders as completed:', error);
+    throw error;
+  }
+}
+
+// ── Holding Orders ──────────────────────────────────────────────────────────
+
+export async function getHoldingOrders(): Promise<Order[]> {
+  try {
+    const { data, error } = await supabase
+      .from(TABLES.ORDERS)
+      .select('*')
+      .eq('status', 'holding')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    return (data || []).map((row) => ({
+      id: row.id,
+      zone: row.zone || '',
+      zone_id: row.zone_id,
+      district_id: row.district_id,
+      date: row.date || '',
+      priority: (row.priority as 'high' | 'standard') || 'standard',
+      status: 'holding' as const,
+      ctn_amount: row.ctn_amount,
+      ctn_to_pallet_ratio: row.ctn_to_pallet_ratio,
+      pallets: row.pallets,
+      do_number: row.do_number,
+      invoice_number: row.invoice_number,
+      invoice: row.invoice_number,
+      pickup: row.pickup,
+      delivery: row.delivery,
+      attachment_urls: row.attachment_urls || [],
+      assigned_driver_id: row.assigned_driver_id || undefined,
+      rawData: row.raw_data || {},
+    }));
+  } catch (error) {
+    console.error('Error getting holding orders:', error);
+    return [];
+  }
+}
+
+export async function addHoldingOrder(order: Partial<Order>): Promise<Order> {
+  try {
+    const id = generateId();
+    const row = {
+      id,
+      zone: order.zone || '',
+      zone_id: order.zone_id || null,
+      district_id: order.district_id || null,
+      date: order.date || null,
+      priority: order.priority || 'standard',
+      status: 'holding',
+      ctn_amount: order.ctn_amount ?? null,
+      ctn_to_pallet_ratio: order.ctn_to_pallet_ratio ?? null,
+      pallets: order.pallets || 0,
+      do_number: order.do_number || null,
+      invoice_number: order.invoice_number || null,
+      pickup: order.pickup || null,
+      delivery: order.delivery || null,
+      attachment_urls: [],
+      raw_data: {},
+    };
+
+    const { error } = await supabase.from(TABLES.ORDERS).insert(row);
+    if (error) throw error;
+
+    return { ...order, id, status: 'holding', rawData: {} } as Order;
+  } catch (error) {
+    console.error('Error adding holding order:', error);
+    throw error;
+  }
+}
+
+export async function releaseHoldingOrder(
+  id: string,
+  updates: { date: string; zone: string; zone_id?: string; district_id?: string; delivery?: string; pickup?: string }
+): Promise<void> {
+  try {
+    const { error } = await supabase
+      .from(TABLES.ORDERS)
+      .update({
+        status: 'pending',
+        date: updates.date,
+        zone: updates.zone,
+        zone_id: updates.zone_id || null,
+        district_id: updates.district_id || null,
+        delivery: updates.delivery || null,
+        pickup: updates.pickup || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .eq('status', 'holding');
+    if (error) throw error;
+  } catch (error) {
+    console.error('Error releasing holding order:', error);
+    throw error;
+  }
+}

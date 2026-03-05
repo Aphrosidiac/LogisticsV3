@@ -1,9 +1,10 @@
 // Internal endpoint called by cron-worker to sync whatsapp_connected state to DB
-// Not exposed to the public — only called from localhost:3001
+// Only accessible from localhost or with valid session
 import { NextRequest, NextResponse } from 'next/server';
 import * as db from '@/lib/db-supabase';
+import { withInternalAuth } from '@/lib/api-auth';
 
-export async function POST(request: NextRequest) {
+export const POST = withInternalAuth(async (request: NextRequest) => {
   try {
     const { connected } = await request.json();
     await db.saveConfig({ whatsappConnected: !!connected });
@@ -11,4 +12,4 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   }
-}
+});

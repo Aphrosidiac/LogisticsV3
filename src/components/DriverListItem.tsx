@@ -51,9 +51,9 @@ export default function DriverListItem({ assignment, index, onMarkDelivered, ini
     }, {} as Record<string, Order[]>);
 
     return (
-        <div className="bg-zinc-900/40 border border-zinc-800 rounded-xl overflow-hidden">
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
             {/* Driver header */}
-            <div className="flex items-center justify-between px-4 py-3 bg-zinc-900/60">
+            <div className="flex items-center justify-between px-4 py-3 bg-zinc-800/50">
                 <div className="flex items-center gap-3">
                     {index !== undefined && (
                         <span className="text-xs tabular-nums text-zinc-400 w-5 text-right shrink-0">

@@ -4,8 +4,9 @@ import {
   sendWhatsAppMessage,
   sendBatchWhatsAppMessages,
 } from '@/lib/whatsapp-client';
+import { withAuth } from '@/lib/api-auth';
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (request: NextRequest) => {
   try {
     const body = await request.json();
     const { recipient, message } = body;
@@ -44,10 +45,10 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+});
 
 // Batch send endpoint
-export async function PUT(request: NextRequest) {
+export const PUT = withAuth(async (request: NextRequest) => {
   try {
     const body = await request.json();
     const { messages } = body; // Array of { recipient, message }
@@ -76,4 +77,4 @@ export async function PUT(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+});

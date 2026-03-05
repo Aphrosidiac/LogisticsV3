@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import * as db from '@/lib/db-supabase';
+import { formatDisplayDate } from '@/lib/utils';
 
 export default function DistributionPage() {
     const { cache, dispatch, addLog, config, isLoading } = useApp();
@@ -234,7 +235,7 @@ export default function DistributionPage() {
 
             {/* ── Date + context strip ── */}
             {hasData && (
-                <div className="flex flex-wrap items-stretch border border-zinc-800 rounded-xl overflow-hidden bg-zinc-900/40">
+                <div className="flex flex-wrap items-stretch border border-zinc-800 rounded-xl overflow-hidden bg-zinc-900 divide-x divide-zinc-800">
                     {/* Date picker */}
                     <div className="flex items-center gap-3 px-5 py-4 flex-1 min-w-[200px]">
                         <Calendar className="w-4 h-4 text-zinc-400 shrink-0" />
@@ -248,8 +249,6 @@ export default function DistributionPage() {
                             />
                         </div>
                     </div>
-
-                    <div className="w-px bg-zinc-800 self-stretch" />
 
                     {/* Pending orders */}
                     <div className="flex items-center gap-3 px-5 py-4">
@@ -265,8 +264,6 @@ export default function DistributionPage() {
                             )}
                         </div>
                     </div>
-
-                    <div className="w-px bg-zinc-800 self-stretch" />
 
                     {/* Balances */}
                     <div className="flex items-center gap-3 px-5 py-4">
@@ -289,18 +286,15 @@ export default function DistributionPage() {
                     </div>
 
                     {balanceCount > 0 && (
-                        <>
-                            <div className="w-px bg-zinc-800 self-stretch" />
-                            <div className="flex items-center px-5 py-4">
-                                <Link
-                                    href="/balances"
-                                    className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 transition-colors"
-                                >
-                                    View balances
-                                    <ArrowRight className="w-3 h-3" />
-                                </Link>
-                            </div>
-                        </>
+                        <div className="flex items-center px-5 py-4">
+                            <Link
+                                href="/balances"
+                                className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 transition-colors"
+                            >
+                                View balances
+                                <ArrowRight className="w-3 h-3" />
+                            </Link>
+                        </div>
                     )}
                 </div>
             )}
@@ -361,7 +355,7 @@ export default function DistributionPage() {
                         </p>
                     )}
                     <p className="text-xs text-zinc-400 mt-2">
-                        Target: {targetDate.split('-').reverse().join('/')}
+                        Target: {formatDisplayDate(targetDate)}
                     </p>
                 </div>
             )}
@@ -370,7 +364,7 @@ export default function DistributionPage() {
             {distribution && (
                 <>
                     {/* Stats scoreboard */}
-                    <div className="flex items-stretch border border-zinc-800 rounded-xl overflow-hidden bg-zinc-900/40 divide-x divide-zinc-800">
+                    <div className="flex items-stretch border border-zinc-800 rounded-xl overflow-hidden bg-zinc-900 divide-x divide-zinc-800">
                         {[
                             { label: 'Orders', value: distribution.summary?.totalOrders || 0, color: 'text-emerald-400', icon: Package },
                             { label: 'Pallets', value: distribution.summary?.totalPallets || 0, color: 'text-purple-400', icon: Boxes },
@@ -391,16 +385,12 @@ export default function DistributionPage() {
                     </div>
 
                     {/* Distribution metadata strip */}
-                    <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 px-4 py-2.5 bg-zinc-900/30 border border-zinc-800/50 rounded-lg text-xs text-zinc-400">
+                    <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 px-4 py-2.5 bg-zinc-900/50 border border-zinc-800 rounded-lg text-xs text-zinc-400">
                         <div className="flex items-center gap-1.5">
                             <Calendar className="w-3 h-3 text-zinc-500" />
                             <span>Date:</span>
                             <span className="text-zinc-200">
-                                {(() => {
-                                    const d = distribution.targetDate || targetDate;
-                                    const [y, m, day] = d.split('-');
-                                    return `${day}/${m}/${y}`;
-                                })()}
+                                {formatDisplayDate(distribution.targetDate || targetDate)}
                             </span>
                         </div>
                         <span className="text-zinc-600">·</span>
@@ -549,7 +539,7 @@ export default function DistributionPage() {
                     )}
 
                     {/* Admin settings footer link */}
-                    <div className="flex items-center justify-between py-3 px-4 border border-zinc-800/50 rounded-xl bg-zinc-900/20">
+                    <div className="flex items-center justify-between py-3 px-4 border border-zinc-800 rounded-xl bg-zinc-900/50">
                         <p className="text-xs text-zinc-400">Configure admin numbers and WhatsApp connection</p>
                         <Link
                             href="/admin"

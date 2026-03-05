@@ -5,6 +5,11 @@
   --foreground: #fafafa;
 }
 
+html.light {
+  --background: #f4f4f5;
+  --foreground: #18181b;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -35,6 +40,18 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: #52525b;
+}
+
+html.light ::-webkit-scrollbar-track {
+  background: #e4e4e7;
+}
+
+html.light ::-webkit-scrollbar-thumb {
+  background: #a1a1aa;
+}
+
+html.light ::-webkit-scrollbar-thumb:hover {
+  background: #71717a;
 }
 
 /* Animations */
@@ -91,4 +108,569 @@ body {
 
 .alert-info {
   @apply p-4 bg-blue-500/10 border border-blue-500/30 rounded-xl text-blue-400;
+}
+
+/* ═══════════════════════════════════════════════════════
+   Light Mode Overrides
+   Maps dark zinc values → light equivalents
+   ═══════════════════════════════════════════════════════ */
+
+/* ── Backgrounds ── */
+html.light {
+  background-color: #f4f4f5;
+}
+
+html.light body {
+  background-color: #f4f4f5;
+}
+
+/* Page-level bg */
+html.light .bg-zinc-950 {
+  background-color: #f4f4f5 !important;
+}
+
+/* Cards, sidebar, modals */
+html.light .bg-zinc-900 {
+  background-color: #ffffff !important;
+}
+
+html.light .bg-zinc-900\/50 {
+  background-color: rgba(255, 255, 255, 0.8) !important;
+}
+
+html.light .bg-zinc-900\/80 {
+  background-color: rgba(255, 255, 255, 0.9) !important;
+}
+
+html.light .bg-zinc-900\/30 {
+  background-color: rgba(255, 255, 255, 0.5) !important;
+}
+
+/* Inputs, hovers, table headers */
+html.light .bg-zinc-800 {
+  background-color: #f4f4f5 !important;
+}
+
+html.light .bg-zinc-800\/50 {
+  background-color: rgba(244, 244, 245, 0.7) !important;
+}
+
+html.light .bg-zinc-800\/40 {
+  background-color: rgba(244, 244, 245, 0.6) !important;
+}
+
+html.light .bg-zinc-800\/60 {
+  background-color: rgba(244, 244, 245, 0.8) !important;
+}
+
+html.light .hover\:bg-zinc-800:hover {
+  background-color: #e4e4e7 !important;
+}
+
+html.light .hover\:bg-zinc-800\/40:hover {
+  background-color: rgba(228, 228, 231, 0.6) !important;
+}
+
+html.light .hover\:bg-zinc-700:hover {
+  background-color: #d4d4d8 !important;
+}
+
+html.light .hover\:bg-zinc-700\/50:hover {
+  background-color: rgba(212, 212, 216, 0.5) !important;
+}
+
+html.light .bg-zinc-700\/40 {
+  background-color: rgba(212, 212, 216, 0.4) !important;
+}
+
+html.light .bg-zinc-700\/50 {
+  background-color: rgba(212, 212, 216, 0.5) !important;
+}
+
+/* Dividers */
+html.light .divide-zinc-800 > * + * {
+  border-color: #d4d4d8 !important;
+}
+
+html.light .divide-zinc-700 > * + * {
+  border-color: #a1a1aa !important;
+}
+
+/* Modal overlay */
+html.light .bg-black\/75 {
+  background-color: rgba(0, 0, 0, 0.4) !important;
+}
+
+/* Additional bg variants */
+html.light .bg-zinc-900\/60 {
+  background-color: rgba(255, 255, 255, 0.95) !important;
+}
+
+html.light .bg-zinc-900\/95 {
+  background-color: rgba(255, 255, 255, 0.98) !important;
+}
+
+html.light .bg-zinc-900\/40 {
+  background-color: rgba(255, 255, 255, 0.85) !important;
+}
+
+html.light .bg-zinc-900\/20 {
+  background-color: rgba(255, 255, 255, 0.7) !important;
+}
+
+html.light .bg-zinc-800\/30 {
+  background-color: rgba(244, 244, 245, 0.5) !important;
+}
+
+html.light .bg-zinc-800\/70 {
+  background-color: rgba(244, 244, 245, 0.9) !important;
+}
+
+/* ── Borders (strengthened for contrast) ── */
+html.light .border-zinc-800 {
+  border-color: #d4d4d8 !important;
+}
+
+html.light .border-zinc-800\/50 {
+  border-color: rgba(212, 212, 216, 0.6) !important;
+}
+
+html.light .border-zinc-800\/60 {
+  border-color: rgba(212, 212, 216, 0.7) !important;
+}
+
+html.light .border-zinc-800\/80 {
+  border-color: rgba(212, 212, 216, 0.9) !important;
+}
+
+html.light .border-zinc-700 {
+  border-color: #a1a1aa !important;
+}
+
+html.light .border-zinc-700\/60 {
+  border-color: rgba(212, 212, 216, 0.6) !important;
+}
+
+html.light .border-zinc-700\/50 {
+  border-color: rgba(212, 212, 216, 0.5) !important;
+}
+
+html.light .border-zinc-700\/80 {
+  border-color: rgba(212, 212, 216, 0.8) !important;
+}
+
+html.light .hover\:border-zinc-600:hover {
+  border-color: #a1a1aa !important;
+}
+
+html.light .hover\:border-zinc-700:hover {
+  border-color: #d4d4d8 !important;
+}
+
+html.light .border-zinc-600\/40 {
+  border-color: rgba(161, 161, 170, 0.4) !important;
+}
+
+/* ── Text (high contrast for readability) ── */
+html.light .text-white {
+  color: #18181b !important;
+}
+
+html.light .text-zinc-100 {
+  color: #18181b !important;
+}
+
+html.light .text-zinc-200 {
+  color: #27272a !important;
+}
+
+html.light .text-zinc-300 {
+  color: #3f3f46 !important;
+}
+
+html.light .text-zinc-400 {
+  color: #52525b !important;
+}
+
+html.light .text-zinc-500 {
+  color: #71717a !important;
+}
+
+html.light .text-zinc-600 {
+  color: #71717a !important;
+}
+
+html.light .text-zinc-700 {
+  color: #a1a1aa !important;
+}
+
+html.light .hover\:text-zinc-200:hover {
+  color: #18181b !important;
+}
+
+html.light .hover\:text-zinc-300:hover {
+  color: #27272a !important;
+}
+
+html.light .hover\:text-zinc-100:hover {
+  color: #18181b !important;
+}
+
+html.light .hover\:text-white:hover {
+  color: #18181b !important;
+}
+
+html.light .placeholder-zinc-500::placeholder,
+html.light .placeholder-zinc-600::placeholder {
+  color: #a1a1aa !important;
+}
+
+/* ── Colored text → darker for light backgrounds ── */
+html.light .text-emerald-300,
+html.light .text-emerald-400 {
+  color: #047857 !important; /* emerald-700 */
+}
+
+html.light .text-emerald-500 {
+  color: #065f46 !important; /* emerald-800 */
+}
+
+html.light .text-blue-300,
+html.light .text-blue-400 {
+  color: #1d4ed8 !important; /* blue-700 */
+}
+
+html.light .text-blue-500 {
+  color: #1e40af !important; /* blue-800 */
+}
+
+html.light .text-amber-200,
+html.light .text-amber-300,
+html.light .text-amber-400 {
+  color: #b45309 !important; /* amber-700 */
+}
+
+html.light .text-amber-200\/70,
+html.light .text-amber-200\/80 {
+  color: #b45309 !important;
+}
+
+html.light .text-orange-300,
+html.light .text-orange-400 {
+  color: #c2410c !important; /* orange-700 */
+}
+
+html.light .text-orange-500 {
+  color: #9a3412 !important; /* orange-800 */
+}
+
+html.light .text-rose-300,
+html.light .text-rose-400 {
+  color: #be123c !important; /* rose-700 */
+}
+
+html.light .text-red-300,
+html.light .text-red-400 {
+  color: #b91c1c !important; /* red-700 */
+}
+
+html.light .text-red-500 {
+  color: #991b1b !important; /* red-800 */
+}
+
+html.light .text-purple-300,
+html.light .text-purple-400 {
+  color: #7e22ce !important; /* purple-700 */
+}
+
+html.light .text-purple-500 {
+  color: #6b21a8 !important; /* purple-800 */
+}
+
+html.light .text-violet-300 {
+  color: #6d28d9 !important; /* violet-700 */
+}
+
+html.light .text-yellow-400,
+html.light .text-yellow-400\/80 {
+  color: #a16207 !important; /* yellow-700 */
+}
+
+html.light .text-green-400 {
+  color: #15803d !important; /* green-700 */
+}
+
+html.light .text-gray-400,
+html.light .text-gray-500 {
+  color: #4b5563 !important; /* gray-600 */
+}
+
+html.light .text-gray-600 {
+  color: #374151 !important; /* gray-700 */
+}
+
+/* ── Colored backgrounds → stronger opacity in light mode ── */
+html.light [class*="bg-emerald-500\/10"] {
+  background-color: rgba(16, 185, 129, 0.15) !important;
+}
+
+html.light [class*="bg-emerald-500\/15"] {
+  background-color: rgba(16, 185, 129, 0.18) !important;
+}
+
+html.light [class*="bg-emerald-500\/20"] {
+  background-color: rgba(16, 185, 129, 0.22) !important;
+}
+
+html.light [class*="bg-blue-500\/10"] {
+  background-color: rgba(59, 130, 246, 0.15) !important;
+}
+
+html.light [class*="bg-blue-500\/20"] {
+  background-color: rgba(59, 130, 246, 0.22) !important;
+}
+
+html.light [class*="bg-amber-500\/10"] {
+  background-color: rgba(245, 158, 11, 0.15) !important;
+}
+
+html.light [class*="bg-amber-500\/20"] {
+  background-color: rgba(245, 158, 11, 0.22) !important;
+}
+
+html.light [class*="bg-orange-500\/10"] {
+  background-color: rgba(249, 115, 22, 0.15) !important;
+}
+
+html.light [class*="bg-orange-500\/20"] {
+  background-color: rgba(249, 115, 22, 0.22) !important;
+}
+
+html.light [class*="bg-rose-500\/10"] {
+  background-color: rgba(244, 63, 94, 0.15) !important;
+}
+
+html.light [class*="bg-rose-500\/15"] {
+  background-color: rgba(244, 63, 94, 0.18) !important;
+}
+
+html.light [class*="bg-rose-500\/20"] {
+  background-color: rgba(244, 63, 94, 0.22) !important;
+}
+
+html.light [class*="bg-red-500\/10"] {
+  background-color: rgba(239, 68, 68, 0.15) !important;
+}
+
+html.light [class*="bg-red-500\/20"] {
+  background-color: rgba(239, 68, 68, 0.22) !important;
+}
+
+html.light [class*="bg-purple-500\/10"] {
+  background-color: rgba(168, 85, 247, 0.15) !important;
+}
+
+html.light [class*="bg-purple-500\/20"] {
+  background-color: rgba(168, 85, 247, 0.22) !important;
+}
+
+html.light [class*="bg-yellow-500\/10"] {
+  background-color: rgba(234, 179, 8, 0.15) !important;
+}
+
+html.light [class*="bg-yellow-500\/20"] {
+  background-color: rgba(234, 179, 8, 0.22) !important;
+}
+
+html.light [class*="bg-green-500\/10"] {
+  background-color: rgba(34, 197, 94, 0.15) !important;
+}
+
+html.light [class*="bg-green-500\/20"] {
+  background-color: rgba(34, 197, 94, 0.22) !important;
+}
+
+html.light [class*="bg-zinc-500\/10"] {
+  background-color: rgba(113, 113, 122, 0.12) !important;
+}
+
+html.light [class*="bg-zinc-500\/20"] {
+  background-color: rgba(113, 113, 122, 0.18) !important;
+}
+
+/* ── Colored borders → stronger in light mode ── */
+html.light [class*="border-emerald-500\/20"],
+html.light [class*="border-emerald-500\/25"],
+html.light [class*="border-emerald-500\/30"] {
+  border-color: rgba(16, 185, 129, 0.4) !important;
+}
+
+html.light [class*="border-blue-500\/20"],
+html.light [class*="border-blue-500\/25"],
+html.light [class*="border-blue-500\/30"] {
+  border-color: rgba(59, 130, 246, 0.4) !important;
+}
+
+html.light [class*="border-amber-500\/20"],
+html.light [class*="border-amber-500\/25"],
+html.light [class*="border-amber-500\/30"] {
+  border-color: rgba(245, 158, 11, 0.4) !important;
+}
+
+html.light [class*="border-orange-500\/20"],
+html.light [class*="border-orange-500\/25"],
+html.light [class*="border-orange-500\/30"] {
+  border-color: rgba(249, 115, 22, 0.4) !important;
+}
+
+html.light [class*="border-rose-500\/20"],
+html.light [class*="border-rose-500\/25"],
+html.light [class*="border-rose-500\/30"] {
+  border-color: rgba(244, 63, 94, 0.4) !important;
+}
+
+html.light [class*="border-red-500\/30"],
+html.light [class*="border-red-500\/40"] {
+  border-color: rgba(239, 68, 68, 0.45) !important;
+}
+
+html.light [class*="border-purple-500\/20"],
+html.light [class*="border-purple-500\/25"],
+html.light [class*="border-purple-500\/30"] {
+  border-color: rgba(168, 85, 247, 0.4) !important;
+}
+
+html.light [class*="border-yellow-500\/20"],
+html.light [class*="border-yellow-500\/30"] {
+  border-color: rgba(234, 179, 8, 0.4) !important;
+}
+
+html.light [class*="border-green-500\/30"] {
+  border-color: rgba(34, 197, 94, 0.4) !important;
+}
+
+html.light [class*="border-violet-500\/25"],
+html.light [class*="border-violet-500\/50"] {
+  border-color: rgba(139, 92, 246, 0.4) !important;
+}
+
+/* ── Row accent borders → stronger ── */
+html.light [class*="border-l-emerald-500\/50"] {
+  border-left-color: rgba(16, 185, 129, 0.6) !important;
+}
+
+html.light [class*="border-l-blue-500\/50"] {
+  border-left-color: rgba(59, 130, 246, 0.6) !important;
+}
+
+html.light [class*="border-l-orange-500\/50"] {
+  border-left-color: rgba(249, 115, 22, 0.6) !important;
+}
+
+html.light [class*="border-l-purple-500\/50"] {
+  border-left-color: rgba(168, 85, 247, 0.6) !important;
+}
+
+html.light [class*="border-l-amber-500\/50"] {
+  border-left-color: rgba(245, 158, 11, 0.6) !important;
+}
+
+/* ── Hover colored text ── */
+html.light .hover\:text-rose-400:hover {
+  color: #be123c !important;
+}
+
+html.light .hover\:text-emerald-400:hover {
+  color: #047857 !important;
+}
+
+/* ── Sidebar active nav override ── */
+html.light .bg-violet-500\/15 {
+  background-color: rgba(139, 92, 246, 0.12) !important;
+}
+
+/* ── Component overrides ── */
+html.light .card {
+  background-color: #ffffff !important;
+  border-color: #d4d4d8 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+html.light .btn-secondary {
+  background-color: #f4f4f5 !important;
+  border-color: #d4d4d8 !important;
+  color: #3f3f46 !important;
+}
+
+html.light .btn-secondary:hover {
+  background-color: #e4e4e7 !important;
+}
+
+html.light .input {
+  background-color: #f4f4f5 !important;
+  border-color: #d4d4d8 !important;
+  color: #18181b !important;
+}
+
+/* ── Select/input elements ── */
+html.light select,
+html.light input[type="text"],
+html.light input[type="number"],
+html.light input[type="date"],
+html.light input[type="tel"],
+html.light input[type="password"],
+html.light input[type="email"],
+html.light textarea {
+  color: #18181b !important;
+}
+
+html.light select option {
+  background-color: #ffffff;
+  color: #18181b;
+}
+
+/* ── Logos (invert white logos for light bg) ── */
+html.light .logo-invertible {
+  filter: invert(1);
+}
+
+/* ── Preserve white text on colored backgrounds ── */
+html.light .btn-primary {
+  color: #ffffff !important;
+}
+
+html.light [class*="bg-emerald-5"] > .text-white,
+html.light [class*="bg-emerald-6"] > .text-white,
+html.light [class*="bg-violet-5"] > .text-white,
+html.light [class*="bg-violet-6"] > .text-white,
+html.light [class*="bg-orange-5"] > .text-white,
+html.light [class*="bg-orange-6"] > .text-white,
+html.light [class*="bg-blue-5"] > .text-white,
+html.light [class*="bg-blue-6"] > .text-white,
+html.light [class*="bg-red-5"] > .text-white,
+html.light [class*="bg-rose-5"] > .text-white,
+html.light [class*="bg-gradient-"] > .text-white {
+  color: #ffffff !important;
+}
+
+/* Buttons with colored bg + text-white in same element */
+html.light .bg-emerald-600.text-white,
+html.light .bg-emerald-500.text-white,
+html.light .bg-violet-600.text-white,
+html.light .bg-violet-500.text-white,
+html.light .bg-orange-600.text-white,
+html.light .bg-orange-500.text-white,
+html.light .bg-blue-500.text-white,
+html.light .bg-blue-600.text-white,
+html.light .bg-red-500.text-white,
+html.light .bg-red-600.text-white,
+html.light .bg-rose-500.text-white,
+html.light .bg-rose-600.text-white {
+  color: #ffffff !important;
+}
+
+/* Gradient backgrounds with text-white */
+html.light [class*="bg-gradient-to-"].text-white,
+html.light [class*="bg-gradient-to-br"].text-white {
+  color: #ffffff !important;
 }

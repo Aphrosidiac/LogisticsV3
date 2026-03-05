@@ -28,12 +28,13 @@ export function proxy(request: NextRequest) {
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set('x-pathname', pathname);
 
-  // Allow login page and auth API routes through
+  // Allow login page, auth API, and public assets through
   if (
     pathname.startsWith('/login') ||
     pathname.startsWith('/api/auth/') ||
     pathname.startsWith('/_next/') ||
-    pathname.startsWith('/favicon')
+    pathname.startsWith('/favicon') ||
+    pathname.startsWith('/logo-')
   ) {
     return NextResponse.next({ request: { headers: requestHeaders } });
   }

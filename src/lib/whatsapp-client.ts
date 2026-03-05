@@ -69,17 +69,30 @@ export async function sendWhatsAppMessage(
 }
 
 export async function sendBatchWhatsAppMessages(
-  messages: Array<{ recipient: string; message: string }>
+  messages: Array<{ recipient: string; message: string }>,
+  batchSize = 5,
+  delayMs = 500
 ): Promise<Array<{ recipient: string; status: string; error?: string }>> {
-  const results = [];
-  for (const msg of messages) {
-    const result = await sendWhatsAppMessage(msg.recipient, msg.message);
-    results.push({
-      recipient: result.recipient,
-      status: result.success ? 'success' : 'failed',
-      error: result.error,
-    });
-    await new Promise((resolve) => setTimeout(resolve, 500));
+  const results: Array<{ recipient: string; status: string; error?: string }> = [];
+
+  for (let i = 0; i < messages.length; i += batchSize) {
+    const batch = messages.slice(i, i + batchSize);
+    const batchResults = await Promise.all(
+      batch.map(async (msg) => {
+        const result = await sendWhatsAppMessage(msg.recipient, msg.message);
+        return {
+          recipient: result.recipient,
+          status: result.success ? 'success' : 'failed',
+          error: result.error,
+        };
+      })
+    );
+    results.push(...batchResults);
+    // Delay between batches to avoid rate limiting
+    if (i + batchSize < messages.length) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
   }
+
   return results;
 }

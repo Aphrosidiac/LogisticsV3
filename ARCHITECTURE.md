@@ -13,6 +13,63 @@ This app has two processes that must run together:
 
 ---
 
+## Authentication
+
+The app uses a proxy-based auth system (`src/proxy.ts`) that runs on every request:
+
+- **Token format**: HMAC-SHA256 signed payload stored in `logistics_session` cookie
+- **Protected routes**: All routes except `/login`, `/api/auth/*`, `/_next/*`, `/favicon*`, `/logo-*`
+- **Unauthenticated users**: Redirected to `/login`
+- **API auth**: Internal endpoints use `withInternalAuth()` from `src/lib/api-auth.ts`
+
+The proxy also sets `x-pathname` header so the layout can detect the login page and render it without the sidebar.
+
+---
+
+## DB Layer Architecture
+
+The database layer is split into focused modules:
+
+| Module | Responsibility |
+|--------|---------------|
+| `db-orders.ts` | Order CRUD, holding orders, status updates |
+| `db-drivers.ts` | Driver CRUD, phone updates |
+| `db-config.ts` | App config load/save, distribution date tracking |
+| `db-distributions.ts` | Save/load distribution results |
+| `db-logs.ts` | Activity log operations |
+| `db-whatsapp.ts` | WhatsApp message log |
+| `db-zones.ts` | Zone and district CRUD |
+| `db-supabase.ts` | Barrel re-export of all modules |
+
+All modules import the Supabase client from `supabase.ts`.
+
+---
+
+## Custom Hooks
+
+| Hook | Purpose |
+|------|---------|
+| `useWhatsAppSender` | Manages WhatsApp connection state, per-recipient send tracking, broadcast |
+| `useMarkDelivered` | Handles marking driver assignments as delivered with loading states |
+| `usePagination` | Generic pagination logic for tables |
+| `useModal` | Modal open/close state management |
+
+---
+
+## Theme System
+
+Dark/light mode is implemented via CSS-only overrides:
+
+- **Toggle**: `ThemeToggle` component in the top-right corner
+- **Persistence**: `localStorage.getItem('theme')` — `'dark'` (default) or `'light'`
+- **Mechanism**: Adds/removes `html.light` class on `<html>` element
+- **CSS**: `globals.css` contains `html.light .class-name` rules that remap dark colors to light equivalents
+- **Logo handling**: `.logo-invertible` class applies `filter: invert(1)` in light mode
+
+No component files need changes for theme support — all handled via CSS specificity overrides.
+
+---
+
 ## Cron Worker (`cron-worker.mjs`)
 
 ### What it does
@@ -77,31 +134,19 @@ The worker polls `GET /api/cron/distribute` every 60 seconds.
 1. Checks current time against `distributionTime` config (set in Admin Settings)
 2. Checks `lastAutoDistributionDate` — skips if already ran today
 3. Loads all pending orders + active drivers
-4. Loads any pending balances scheduled for tomorrow (partial deliveries from previous days)
+4. Loads any pending balances scheduled for tomorrow
 5. Runs distribution algorithm
 6. Saves distribution to DB
 7. Marks assigned orders as `assigned`
 8. Creates pending balances for any partially-fulfilled orders
 9. Marks today as done (`lastAutoDistributionDate = today`)
-10. Sends WhatsApp message to each assigned driver (if WhatsApp connected)
+10. Sends WhatsApp messages based on `autoMessageRecipients` config:
+    - `'drivers'` — individual assignments to each driver with a phone number
+    - `'admins'` — full distribution report to all admin numbers
+    - `'both'` — both of the above
 
 ### Pending Balances
 When an order can't be fully assigned in one distribution (driver capacity exceeded), the remaining pallets become a **pending balance** scheduled for the next day. The next cron run picks these up and includes them in the distribution automatically.
-
-This means a driver may receive **multiple WhatsApp messages** if they are assigned both a pending balance and a new order — this is correct behavior.
-
-### Manual cron trigger (for testing)
-```bash
-# Trigger immediately (bypasses time check if distributionTime is 00:00)
-curl http://localhost:3000/api/cron/distribute
-
-# Reset "already ran today" flag to force a re-run
-# (replace the ID with your actual app_config row ID)
-curl -X PATCH "https://<project>.supabase.co/rest/v1/app_config?id=eq.<id>" \
-  -H "apikey: <anon-key>" \
-  -H "Content-Type: application/json" \
-  -d '{"last_auto_distribution_date": "2000-01-01"}'
-```
 
 ---
 
@@ -126,6 +171,7 @@ All WhatsApp routes are thin proxies to the worker. No Puppeteer runs inside Nex
 NEXT_PUBLIC_SUPABASE_URL=https://<project>.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon-key>
 NEXT_PUBLIC_SITE_URL=http://localhost:3000   # used by worker to call Next.js API
+AUTH_SECRET=your-secret-key                  # HMAC signing key for session tokens
 ```
 
 ---
@@ -134,10 +180,12 @@ NEXT_PUBLIC_SITE_URL=http://localhost:3000   # used by worker to call Next.js AP
 
 - [ ] Run worker with a process manager (PM2, systemd, etc.) so it restarts on crash
 - [ ] Set `NEXT_PUBLIC_SITE_URL` to your production domain
+- [ ] Set `AUTH_SECRET` to a strong random value
 - [ ] Scan QR once on the production server to save session
 - [ ] Keep `.wwebjs_auth/` persistent across deployments (do not wipe it)
 - [ ] Port 3001 should **not** be exposed publicly — firewall it to localhost only
 - [ ] Set `distributionTime` in Admin Settings to your desired daily run time
+- [ ] Configure `autoMessageRecipients` in Admin Settings (drivers, admins, or both)
 
 ### PM2 example
 ```bash
