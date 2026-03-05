@@ -37,6 +37,7 @@ export const TABLES = {
   LOGS: 'logs',
   WHATSAPP_MESSAGES: 'whatsapp_messages',
   RECEIPTS: 'receipts',
+  CLIENTS: 'clients',
 } as const;
 
 // SQL Schema for Supabase tables
@@ -211,6 +212,21 @@ CREATE TABLE IF NOT EXISTS receipts (
 CREATE INDEX IF NOT EXISTS idx_receipts_sheet_id ON receipts(sheet_id);
 CREATE INDEX IF NOT EXISTS idx_receipts_row_index ON receipts(row_index);
 
+-- Clients table
+CREATE TABLE IF NOT EXISTS clients (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  company_name TEXT NOT NULL,
+  contact_person TEXT,
+  phone TEXT,
+  item_type TEXT,
+  delivery_locations TEXT[] DEFAULT '{}',
+  notes TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_clients_company_name ON clients(company_name);
+
 -- Updated timestamp trigger function
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
@@ -229,6 +245,7 @@ CREATE TRIGGER update_schemas_updated_at BEFORE UPDATE ON schemas FOR EACH ROW E
 CREATE TRIGGER update_app_config_updated_at BEFORE UPDATE ON app_config FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_whatsapp_messages_updated_at BEFORE UPDATE ON whatsapp_messages FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_receipts_updated_at BEFORE UPDATE ON receipts FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_clients_updated_at BEFORE UPDATE ON clients FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 `;
 
 export default supabase;

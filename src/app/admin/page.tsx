@@ -54,15 +54,11 @@ export default function AdminPage() {
     const [isSavingSchedule, setIsSavingSchedule] = useState(false);
     const [scheduleSaved, setScheduleSaved] = useState(false);
 
-    // Holding orders count
-    const [holdingCount, setHoldingCount] = useState(0);
-
     const assignments = cache.lastDistribution?.assignments || [];
 
     useEffect(() => {
         wa.checkStatus();
         loadDriverPhones();
-        db.getHoldingOrders().then(h => setHoldingCount(h.length)).catch(() => {});
     }, []);
 
     useEffect(() => {
@@ -224,19 +220,6 @@ export default function AdminPage() {
                         </Link>{' '}
                         to scan a QR code first.
                     </span>
-                </div>
-            )}
-
-            {/* Holding orders banner */}
-            {holdingCount > 0 && (
-                <div className="flex items-center gap-3 bg-orange-500/10 border border-orange-500/30 rounded-xl px-4 py-3">
-                    <Clock className="w-5 h-5 text-orange-400 shrink-0" />
-                    <span className="text-sm text-orange-300">
-                        <strong>{holdingCount}</strong> holding order{holdingCount !== 1 ? 's' : ''} awaiting delivery details.
-                    </span>
-                    <Link href="/sheets-manager" className="ml-auto text-xs text-orange-400 hover:text-orange-300 underline whitespace-nowrap">
-                        View in DB Manager →
-                    </Link>
                 </div>
             )}
 

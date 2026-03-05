@@ -3,7 +3,8 @@
 //   db-config.ts, db-orders.ts, db-drivers.ts, db-distributions.ts, db-logs.ts, db-whatsapp.ts
 
 export { getConfig, saveConfig, saveSchema, getSchema, setLastAutoDistributionDate } from './db-config';
-export { saveOrders, getAllOrders, clearOrders, addOrder, updateOrder, deleteOrder, updateOrdersToAssigned, getPendingOrderCountForDate, markOrdersAsCompleted, getHoldingOrders, addHoldingOrder, releaseHoldingOrder } from './db-orders';
+export { saveOrders, getAllOrders, clearOrders, addOrder, updateOrder, deleteOrder, updateOrdersToAssigned, getPendingOrderCountForDate, markOrdersAsCompleted } from './db-orders';
+export { getAllClients, addClient, updateClient, deleteClient, clearClients } from './db-clients';
 export { saveDrivers, getAllDrivers, addDriver, updateDriver, deleteDriver, setDriverActive, getActiveDrivers, clearDrivers } from './db-drivers';
 export { saveDistribution, getAllDistributions, getDistribution, getLatestDistribution } from './db-distributions';
 export { addLog, getAllLogs, clearLogs } from './db-logs';
@@ -130,11 +131,12 @@ import { getAllDrivers, clearDrivers, saveDrivers } from './db-drivers';
 import { getAllDistributions } from './db-distributions';
 import { getAllLogs, clearLogs } from './db-logs';
 import { getAllWhatsAppMessages } from './db-whatsapp';
+import { getAllClients, clearClients } from './db-clients';
 import { saveConfig } from './db-config';
 
 export async function exportAllData() {
   try {
-    const [config, sheets, orders, drivers, distributions, logs, whatsapp] = await Promise.all([
+    const [config, sheets, orders, drivers, distributions, logs, whatsapp, clients] = await Promise.all([
       getConfig(),
       getAllSheets(),
       getAllOrders(),
@@ -142,6 +144,7 @@ export async function exportAllData() {
       getAllDistributions(),
       getAllLogs(),
       getAllWhatsAppMessages(),
+      getAllClients(),
     ]);
 
     return {
@@ -152,6 +155,7 @@ export async function exportAllData() {
       distributions,
       logs,
       whatsapp,
+      clients,
       exportedAt: new Date().toISOString(),
     };
   } catch (error) {
@@ -175,6 +179,13 @@ export async function importAllData(data: any) {
     if (data.sheets) {
       for (const sheet of data.sheets) {
         await createSheet(sheet.name, sheet.type, sheet.headers, sheet.data);
+      }
+    }
+
+    if (data.clients && data.clients.length > 0) {
+      const { addClient } = await import('./db-clients');
+      for (const client of data.clients) {
+        await addClient(client);
       }
     }
 

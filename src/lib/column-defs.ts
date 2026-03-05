@@ -70,7 +70,6 @@ export const ORDER_COLS: ColDef[] = [
             { value: 'pending', label: 'Pending' },
             { value: 'assigned', label: 'Assigned' },
             { value: 'completed', label: 'Completed' },
-            { value: 'holding', label: 'Holding' },
         ],
     },
 ];
@@ -113,7 +112,6 @@ export const STATUS_STYLE: Record<string, string> = {
     in_progress: 'bg-purple-500/10 text-purple-400 border border-purple-500/25',
     completed:   'bg-emerald-500/10 text-emerald-400 border border-emerald-500/25',
     cancelled:   'bg-zinc-700/40 text-zinc-500 border border-zinc-700/60',
-    holding:     'bg-orange-500/10 text-orange-400 border border-orange-500/25',
 };
 
 export const STATUS_ROW_ACCENT: Record<string, string> = {
@@ -122,5 +120,4 @@ export const STATUS_ROW_ACCENT: Record<string, string> = {
     in_progress: 'border-l-[3px] border-l-purple-500/50',
     completed:   'border-l-[3px] border-l-emerald-500/50',
     cancelled:   'border-l-[3px] border-l-zinc-600/40',
-    holding:     'border-l-[3px] border-l-orange-500/50',
 };

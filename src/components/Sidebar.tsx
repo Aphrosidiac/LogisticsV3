@@ -14,6 +14,7 @@ import {
     Clock,
     CheckCircle,
     MapPin,
+    Building2,
     LogOut,
 } from 'lucide-react';
 
@@ -24,6 +25,7 @@ const navItems = [
     { href: '/completed-orders', label: 'Completed Orders', icon: CheckCircle },
     { href: '/balances', label: 'Pending Balances', icon: Clock },
     { href: '/zones', label: 'Zones & Districts', icon: MapPin },
+    { href: '/clients', label: 'Clients', icon: Building2 },
     { href: '/whatsapp', label: 'WhatsApp', icon: MessageSquare },
     { href: '/admin', label: 'Admin Settings', icon: Settings },
     { href: '/backup', label: 'Backup & Restore', icon: FileSpreadsheet },
