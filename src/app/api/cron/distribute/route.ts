@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { calculateDistribution, formatDriverAssignmentMessage, formatDistributionMessage, getTomorrowDate } from '@/lib/distribution';
-import { getPendingBalancesForDate, convertBalancesToOrders, batchCreateBalances } from '@/lib/balances';
+import { calculateDistribution, formatDriverAssignmentMessage, formatDistributionMessage, formatSkippedOrdersMessage, getTomorrowDate } from '@/lib/distribution';
+import { getLocalDate } from '@/lib/utils';
 import { getWhatsAppState, sendWhatsAppMessage } from '@/lib/whatsapp-client';
 import { withInternalAuth } from '@/lib/api-auth';
 import * as db from '@/lib/db-supabase';
@@ -11,9 +11,14 @@ export const GET = withInternalAuth(async (request: NextRequest) => {
         const config = await db.getConfig();
         const distributionTime = config.distributionTime || '20:00';
 
-        // 2. Check current time against scheduled time
+        // 2. Check current time against scheduled time (in MY/SG timezone)
         const now = new Date();
-        const currentTotalMinutes = now.getHours() * 60 + now.getMinutes();
+        const localTimeStr = new Intl.DateTimeFormat('en-GB', {
+            timeZone: 'Asia/Kuala_Lumpur',
+            hour: '2-digit', minute: '2-digit', hour12: false,
+        }).format(now);
+        const [currentHour, currentMin] = localTimeStr.split(':').map(Number);
+        const currentTotalMinutes = currentHour * 60 + currentMin;
         const [schedHours, schedMinutes] = distributionTime.split(':').map(Number);
         const schedTotalMinutes = schedHours * 60 + schedMinutes;
 
@@ -21,13 +26,13 @@ export const GET = withInternalAuth(async (request: NextRequest) => {
             return NextResponse.json({
                 ran: false,
                 reason: 'not time yet',
-                currentTime: `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`,
+                currentTime: localTimeStr,
                 scheduledAt: distributionTime,
             });
         }
 
-        // 3. Check if already ran today
-        const today = now.toISOString().split('T')[0];
+        // 3. Check if already ran today (MY/SG date)
+        const today = getLocalDate();
         if (config.lastAutoDistributionDate === today) {
             return NextResponse.json({ ran: false, reason: 'already ran today', date: today });
         }
@@ -44,19 +49,10 @@ export const GET = withInternalAuth(async (request: NextRequest) => {
         // Only distribute pending orders
         const pendingOrders = allOrders.filter(o => !o.status || o.status === 'pending');
 
-        // 6. Load and merge pending balances for tomorrow
-        const balances = await getPendingBalancesForDate(tomorrow);
-        let ordersToDistribute = pendingOrders;
-
-        if (balances.length > 0) {
-            const balanceOrders = await convertBalancesToOrders(balances);
-            ordersToDistribute = [...balanceOrders, ...pendingOrders];
-        }
-
-        // 7. Run distribution — handle "no orders" gracefully
+        // 6. Run distribution — handle "no orders" gracefully
         let result;
         try {
-            result = calculateDistribution(ordersToDistribute, activeDrivers, tomorrow);
+            result = calculateDistribution(pendingOrders, activeDrivers, tomorrow);
         } catch (distErr: any) {
             await db.setLastAutoDistributionDate(today);
             return NextResponse.json({
@@ -67,10 +63,10 @@ export const GET = withInternalAuth(async (request: NextRequest) => {
             });
         }
 
-        // 8. Save distribution
+        // 7. Save distribution
         const distributionId = await db.saveDistribution(result);
 
-        // 9. Mark assigned orders as 'assigned' with driver ID
+        // 8. Mark assigned orders as 'assigned' with driver ID
         const orderDriverMap = result.assignments.flatMap(a =>
             a.orders.map(o => ({ orderId: o.id, driverId: a.driver.id }))
         );
@@ -78,15 +74,10 @@ export const GET = withInternalAuth(async (request: NextRequest) => {
             await db.updateOrdersToAssigned(orderDriverMap);
         }
 
-        // 10. Save pending balances
-        if (result.pendingBalances && result.pendingBalances.length > 0) {
-            await batchCreateBalances(result.pendingBalances, distributionId);
-        }
-
-        // 11. Mark today as done
+        // 9. Mark today as done
         await db.setLastAutoDistributionDate(today);
 
-        // 12. Send WhatsApp based on autoMessageRecipients setting
+        // 10. Send WhatsApp based on autoMessageRecipients setting
         const recipients = config.autoMessageRecipients || 'drivers';
         const waResults: { recipient: string; success: boolean }[] = [];
         const waState = await getWhatsAppState();
@@ -140,6 +131,26 @@ export const GET = withInternalAuth(async (request: NextRequest) => {
                             waResults.push({ recipient: `admin:${phone}`, success: res.success });
                         } catch {
                             waResults.push({ recipient: `admin:${phone}`, success: false });
+                        }
+                        await new Promise(r => setTimeout(r, 300));
+                    }
+                }
+            }
+
+            // Send skipped orders alert to admins (separate message)
+            if (result.skippedOrders && result.skippedOrders.length > 0) {
+                const adminNumbers = config.adminNumbers || [];
+                if (adminNumbers.length > 0) {
+                    const skippedMsg = formatSkippedOrdersMessage(result.skippedOrders);
+                    for (const phone of adminNumbers) {
+                        try {
+                            const res = await sendWhatsAppMessage(phone, skippedMsg);
+                            if (res.success) {
+                                await db.addWhatsAppMessage(phone, skippedMsg, distributionId);
+                            }
+                            waResults.push({ recipient: `admin-skipped:${phone}`, success: res.success });
+                        } catch {
+                            waResults.push({ recipient: `admin-skipped:${phone}`, success: false });
                         }
                         await new Promise(r => setTimeout(r, 300));
                     }

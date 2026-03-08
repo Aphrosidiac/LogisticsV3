@@ -1,6 +1,7 @@
 'use client';
 
 import { ReactNode, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
 interface ModalProps {
@@ -46,21 +47,21 @@ export default function Modal({
 
     if (!isOpen) return null;
 
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
+    return createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             {/* Backdrop */}
             <div
-                className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+                className="absolute inset-0 modal-backdrop backdrop-blur-sm"
                 onClick={onClose}
             />
 
             {/* Modal */}
             <div
-                className={`relative w-full ${sizeClasses[size]} mx-4 bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl animate-in fade-in zoom-in-95 duration-200`}
+                className={`relative w-full ${sizeClasses[size]} bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl flex flex-col max-h-[90vh] animate-fadeIn`}
                 onClick={(e) => e.stopPropagation()}
             >
                 {/* Header */}
-                <div className="flex items-center justify-between p-6 border-b border-zinc-800">
+                <div className="flex items-center justify-between p-6 border-b border-zinc-800 shrink-0">
                     <h2 className="text-xl font-semibold text-white">{title}</h2>
                     <button
                         onClick={onClose}
@@ -71,15 +72,16 @@ export default function Modal({
                 </div>
 
                 {/* Content */}
-                <div className="p-6 max-h-[60vh] overflow-y-auto">{children}</div>
+                <div className="p-6 overflow-y-auto">{children}</div>
 
                 {/* Footer */}
                 {footer && (
-                    <div className="p-6 border-t border-zinc-800 flex justify-end gap-3">
+                    <div className="p-6 border-t border-zinc-800 flex justify-end gap-3 shrink-0">
                         {footer}
                     </div>
                 )}
             </div>
-        </div>
+        </div>,
+        document.body
     );
 }

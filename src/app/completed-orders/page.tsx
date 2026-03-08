@@ -116,19 +116,20 @@ export default function CompletedOrdersPage() {
   }
 
   const exportToCSV = () => {
-    const headers = ['DO Number', 'Invoice', 'Zone', 'Delivery', 'Pallets', 'Priority', 'Order Date', 'Completed Date', 'Driver'];
+    const headers = ['DO Number', 'Invoice', 'Zone', 'Pickup', 'Delivery', 'Pallets', 'Priority', 'Order Date', 'Completed Date', 'Driver'];
     const csvData = filteredAndSortedOrders.map(order => [
       order.do_number || '',
       order.invoice || '',
       order.zone,
+      order.pickup || '',
       order.delivery || '',
       order.pallets.toString(),
       order.priority || 'standard',
-      order.date,
+      formatDisplayDate(order.date),
       formatCompletedDate(order.completed_date),
       order.assigned_driver_id ? (driverMap[order.assigned_driver_id] || order.assigned_driver_id) : '',
     ]);
-    const csvContent = [headers, ...csvData].map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
+    const csvContent = [headers, ...csvData].map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');

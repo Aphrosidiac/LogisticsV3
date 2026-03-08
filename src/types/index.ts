@@ -70,18 +70,20 @@ export interface DriverAssignment {
   orders: Order[];
   totalPallets: number;
   totalOrders: number;
+  isDelivered?: boolean;
 }
 
 export interface DistributionResult {
+  id?: string;
   assignments: DriverAssignment[];
   unassignedDrivers: Driver[];
-  pendingBalances?: PendingBalance[];
+  skippedOrders?: Order[];
   summary: {
     totalOrders: number;
     totalPallets: number;
     totalZones: number;
     assignedDrivers: number;
-    balancesCreated?: number;
+    skippedOrders?: number;
   };
   timestamp: string;
   targetDate?: string;
@@ -119,29 +121,6 @@ export interface MessageTemplate {
   id: string;
   name: string;
   content: string;
-}
-
-// Pending Balance for partial fulfillments
-export interface PendingBalance {
-  id: string;
-  original_order_id?: string;
-  zone: string;
-  zone_id?: string;
-  district_id?: string;
-  pickup?: string;
-  delivery?: string;
-  do_number?: string;
-  original_quantity: number;
-  fulfilled_quantity: number;
-  remaining_quantity: number;
-  original_date: string;
-  scheduled_for_date: string;
-  status: 'pending' | 'scheduled' | 'fulfilled' | 'cancelled';
-  distribution_id?: string;
-  fulfilled_by_order_id?: string;
-  raw_data?: Record<string, any>;
-  created_at?: string;
-  updated_at?: string;
 }
 
 // Field schema for flexible database configuration

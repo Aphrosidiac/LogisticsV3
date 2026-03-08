@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import {
     Building2,
     Plus,
@@ -211,10 +212,14 @@ export default function ClientsPage() {
             </div>
 
             {/* Client Modal */}
-            {modal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fadeIn">
-                    <div className="bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
-                        <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800">
+            {modal && createPortal(
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                    {/* Backdrop */}
+                    <div className="absolute inset-0 modal-backdrop backdrop-blur-sm" onClick={() => setModal(null)} />
+                    {/* Modal card */}
+                    <div className="relative bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh] animate-fadeIn">
+                        {/* Sticky header */}
+                        <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800 shrink-0">
                             <h3 className="text-lg font-semibold text-white">
                                 {modal.mode === 'add' ? 'Add Client' : 'Edit Client'}
                             </h3>
@@ -222,7 +227,8 @@ export default function ClientsPage() {
                                 <X className="w-5 h-5" />
                             </button>
                         </div>
-                        <div className="p-6">
+                        {/* Scrollable body */}
+                        <div className="p-6 overflow-y-auto">
                             <ClientForm
                                 initial={modal.data}
                                 saving={saving}
@@ -231,7 +237,8 @@ export default function ClientsPage() {
                             />
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     );
@@ -302,7 +309,6 @@ function ClientForm({ initial, saving, onSave, onCancel }: {
                     onChange={e => set('company_name', e.target.value)}
                     placeholder="e.g. ABC Logistics Sdn Bhd"
                     className={`w-full mt-1 px-3 py-2 bg-zinc-800 border rounded-lg text-zinc-200 text-sm focus:outline-none focus:ring-1 transition-colors ${error ? 'border-rose-500/70 focus:border-rose-500 focus:ring-rose-500/30' : 'border-zinc-700 focus:border-cyan-500 focus:ring-cyan-500/30'}`}
-                    autoFocus
                 />
                 {error && <p className="text-xs text-rose-400 mt-1">{error}</p>}
             </div>

@@ -1,5 +1,16 @@
 // Utility functions
 
+/** Application timezone — matches deployment region (MY/SG = UTC+8) */
+export const APP_TIMEZONE = 'Asia/Kuala_Lumpur';
+
+/**
+ * Get current date as YYYY-MM-DD in the app timezone (not UTC).
+ * Safe to call on both server and client.
+ */
+export function getLocalDate(date: Date = new Date()): string {
+    return new Intl.DateTimeFormat('en-CA', { timeZone: APP_TIMEZONE }).format(date);
+}
+
 export function generateId(): string {
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
         return crypto.randomUUID();

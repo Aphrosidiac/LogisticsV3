@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Plus, Trash2, GripVertical, AlertCircle } from 'lucide-react';
 import type { FieldSchema, FieldType, TableSchema } from '@/types';
 import { generateId } from '@/lib/utils';
@@ -179,9 +180,10 @@ export default function SchemaBuilder({ type, onSave, onCancel, initialSchema }:
         onSave(schema);
     };
 
-    return (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-            <div className="bg-zinc-900 rounded-xl w-full max-w-5xl max-h-[90vh] flex flex-col border border-zinc-800 shadow-2xl">
+    return createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 modal-backdrop backdrop-blur-sm" />
+            <div className="relative bg-zinc-900 rounded-xl w-full max-w-5xl max-h-[90vh] flex flex-col border border-zinc-800 shadow-2xl">
                 {/* Header */}
                 <div className="flex-shrink-0 border-b border-zinc-800 p-6">
                     <h2 className="text-2xl font-bold text-white mb-2">
@@ -411,6 +413,7 @@ export default function SchemaBuilder({ type, onSave, onCancel, initialSchema }:
                     </button>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 }

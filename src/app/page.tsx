@@ -1,6 +1,7 @@
 'use client';
 
 import { useApp } from '@/context/AppContext';
+import { getLocalDate } from '@/lib/utils';
 import StatCard from '@/components/StatCard';
 import Link from 'next/link';
 import {
@@ -37,7 +38,7 @@ export default function Dashboard() {
   const hasDistribution = cache.lastDistribution !== null;
   const hasAdmins = config.adminNumbers.length > 0;
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = getLocalDate();
   const overdueOrders = cache.orders.filter(
     (o) => (!o.status || o.status === 'pending') && o.date < today
   );

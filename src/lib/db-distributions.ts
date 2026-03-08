@@ -11,7 +11,10 @@ export async function saveDistribution(distribution: DistributionResult) {
       .insert({
         id,
         assignments: distribution.assignments,
-        summary: distribution.summary,
+        summary: {
+          ...distribution.summary,
+          skippedOrdersList: distribution.skippedOrders || [],
+        },
         target_date: distribution.targetDate || new Date().toISOString().split('T')[0],
         timestamp: distribution.timestamp,
       });
@@ -65,16 +68,31 @@ export async function getLatestDistribution(): Promise<DistributionResult | null
       .single();
 
     if (error) return null;
+    const { skippedOrdersList, ...summaryRest } = data.summary || {};
     return {
+      id: data.id,
       assignments: data.assignments || [],
       unassignedDrivers: data.unassigned_drivers || [],
-      pendingBalances: data.pending_balances || [],
-      summary: data.summary,
+      skippedOrders: skippedOrdersList || [],
+      summary: summaryRest,
       timestamp: data.timestamp,
       targetDate: data.target_date,
     };
   } catch (error) {
     console.error('Error getting latest distribution:', error);
     return null;
+  }
+}
+
+export async function updateDistributionAssignments(id: string, assignments: DistributionResult['assignments']): Promise<void> {
+  try {
+    const { error } = await supabase
+      .from(TABLES.DISTRIBUTIONS)
+      .update({ assignments })
+      .eq('id', id);
+    if (error) throw error;
+  } catch (error) {
+    console.error('Error updating distribution assignments:', error);
+    throw error;
   }
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import {
     Package,
@@ -540,7 +541,7 @@ export default function DatabaseManagerPage() {
                         </div>
                         <div className="flex items-center gap-2">
                             <button
-                                onClick={() => downloadCSV('orders.csv', ordersToCSV(orders))}
+                                onClick={() => downloadCSV('orders.csv', ordersToCSV(filteredOrders))}
                                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-400 hover:text-zinc-200 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 hover:border-zinc-600 rounded-lg transition-all"
                             >
                                 <Download className="w-3.5 h-3.5" /> Export
@@ -1071,25 +1072,25 @@ function SortTh({ label, field, sort, onSort, className }: {
 // ── FormModal wrapper ─────────────────────────────────────────────────────────
 
 function FormModal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
-    return (
-        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 overflow-y-auto" onClick={onClose}>
-            <div className="flex min-h-full items-center justify-center p-6">
-                <div
-                    className="w-full max-w-2xl bg-zinc-900 border border-zinc-700/60 rounded-2xl shadow-2xl my-auto"
-                    onClick={e => e.stopPropagation()}
-                >
-                    <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800">
-                        <h2 className="text-base font-semibold text-white tracking-tight">{title}</h2>
-                        <button onClick={onClose} className="p-1.5 text-zinc-500 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors">
-                            <X className="w-4 h-4" />
-                        </button>
-                    </div>
-                    <div className="px-6 py-5">
-                        {children}
-                    </div>
+    return createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
+            <div className="absolute inset-0 modal-backdrop backdrop-blur-sm" onClick={onClose} />
+            <div
+                className="relative w-full max-w-2xl bg-zinc-900 border border-zinc-700/60 rounded-2xl shadow-2xl flex flex-col max-h-[90vh] animate-fadeIn"
+                onClick={e => e.stopPropagation()}
+            >
+                <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800 shrink-0">
+                    <h2 className="text-base font-semibold text-white tracking-tight">{title}</h2>
+                    <button onClick={onClose} className="p-1.5 text-zinc-500 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors">
+                        <X className="w-4 h-4" />
+                    </button>
+                </div>
+                <div className="px-6 py-5 overflow-y-auto">
+                    {children}
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 }
 

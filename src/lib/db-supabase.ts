@@ -6,7 +6,7 @@ export { getConfig, saveConfig, saveSchema, getSchema, setLastAutoDistributionDa
 export { saveOrders, getAllOrders, clearOrders, addOrder, updateOrder, deleteOrder, updateOrdersToAssigned, getPendingOrderCountForDate, markOrdersAsCompleted } from './db-orders';
 export { getAllClients, addClient, updateClient, deleteClient, clearClients } from './db-clients';
 export { saveDrivers, getAllDrivers, addDriver, updateDriver, deleteDriver, setDriverActive, getActiveDrivers, clearDrivers } from './db-drivers';
-export { saveDistribution, getAllDistributions, getDistribution, getLatestDistribution } from './db-distributions';
+export { saveDistribution, getAllDistributions, getDistribution, getLatestDistribution, updateDistributionAssignments } from './db-distributions';
 export { addLog, getAllLogs, clearLogs } from './db-logs';
 export { addWhatsAppMessage, updateWhatsAppMessage, getAllWhatsAppMessages, getPendingWhatsAppMessages } from './db-whatsapp';
 

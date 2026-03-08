@@ -1,6 +1,6 @@
 'use client';
 
-import { MapPin, PackageCheck, Loader } from 'lucide-react';
+import { MapPin, PackageCheck, Loader, Check, X, Send, Phone } from 'lucide-react';
 import { DriverAssignment, Order } from '@/types';
 import { useState } from 'react';
 
@@ -9,6 +9,9 @@ interface DriverListItemProps {
     index?: number;
     onMarkDelivered?: (assignment: DriverAssignment) => Promise<void>;
     initialDelivered?: boolean;
+    phone?: string;
+    sendState?: { status: 'idle' | 'sending' | 'sent' | 'failed'; error?: string };
+    onSend?: () => void;
 }
 
 function getCleanZoneName(zone: string): string {
@@ -23,12 +26,14 @@ function getCleanZoneName(zone: string): string {
     }
 }
 
-export default function DriverListItem({ assignment, index, onMarkDelivered, initialDelivered }: DriverListItemProps) {
+export default function DriverListItem({ assignment, index, onMarkDelivered, initialDelivered, phone, sendState, onSend }: DriverListItemProps) {
     const [marking, setMarking] = useState(false);
     const [delivered, setDelivered] = useState(initialDelivered ?? false);
+    const [confirming, setConfirming] = useState(false);
 
-    async function handleMarkDelivered() {
+    async function handleConfirm() {
         if (!onMarkDelivered || marking || delivered) return;
+        setConfirming(false);
         setMarking(true);
         try {
             await onMarkDelivered(assignment);
@@ -90,22 +95,73 @@ export default function DriverListItem({ assignment, index, onMarkDelivered, ini
                         </p>
                     </div>
 
+                    {onSend && (
+                        <div className="flex items-center gap-2 border-l border-zinc-700 pl-4">
+                            {phone ? (
+                                <span className="flex items-center gap-1 text-xs text-zinc-400">
+                                    <Phone className="w-3 h-3" />
+                                    {phone}
+                                </span>
+                            ) : (
+                                <span className="text-xs text-zinc-500">No phone</span>
+                            )}
+                            <button
+                                onClick={onSend}
+                                disabled={!phone || sendState?.status === 'sending'}
+                                className={
+                                    sendState?.status === 'sent'
+                                        ? 'flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 cursor-default'
+                                        : sendState?.status === 'failed'
+                                        ? 'flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                                        : 'flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-emerald-600 text-white hover:bg-emerald-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed'
+                                }
+                            >
+                                {sendState?.status === 'sending' ? (
+                                    <><Loader className="w-3 h-3 animate-spin" /> Sending…</>
+                                ) : sendState?.status === 'sent' ? (
+                                    <><Check className="w-3 h-3" /> Sent</>
+                                ) : sendState?.status === 'failed' ? (
+                                    <><X className="w-3 h-3" /> Failed</>
+                                ) : (
+                                    <><Send className="w-3 h-3" /> Send</>
+                                )}
+                            </button>
+                        </div>
+                    )}
+
                     {onMarkDelivered && (
                         delivered ? (
                             <span className="flex items-center gap-1 text-xs text-emerald-400 font-medium whitespace-nowrap border-l border-zinc-700 pl-5">
                                 <PackageCheck className="w-3.5 h-3.5" />
                                 Delivered
                             </span>
+                        ) : confirming ? (
+                            <div className="flex items-center gap-2 border-l border-zinc-700 pl-5">
+                                <span className="text-xs text-zinc-400 whitespace-nowrap">Mark all as delivered?</span>
+                                <button
+                                    onClick={handleConfirm}
+                                    disabled={marking}
+                                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-emerald-600 text-white hover:bg-emerald-500 transition-colors disabled:opacity-50"
+                                >
+                                    {marking
+                                        ? <><Loader className="w-3 h-3 animate-spin" /> Marking…</>
+                                        : <><Check className="w-3 h-3" /> Confirm</>
+                                    }
+                                </button>
+                                <button
+                                    onClick={() => setConfirming(false)}
+                                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-zinc-400 bg-zinc-700/50 hover:bg-zinc-700 transition-colors"
+                                >
+                                    <X className="w-3 h-3" /> Cancel
+                                </button>
+                            </div>
                         ) : (
                             <button
-                                onClick={handleMarkDelivered}
+                                onClick={() => setConfirming(true)}
                                 disabled={marking}
                                 className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20 transition-colors disabled:opacity-50 disabled:cursor-wait whitespace-nowrap ml-1"
                             >
-                                {marking
-                                    ? <><Loader className="w-3 h-3 animate-spin" /> Marking…</>
-                                    : <><PackageCheck className="w-3 h-3" /> Mark Delivered</>
-                                }
+                                <PackageCheck className="w-3 h-3" /> Mark Delivered
                             </button>
                         )
                     )}

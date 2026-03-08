@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useApp } from '@/context/AppContext';
 import { calculateDistribution, getTomorrowDate, formatDistributionMessage } from '@/lib/distribution';
-import { getPendingBalancesForDate, convertBalancesToOrders, batchCreateBalances } from '@/lib/balances';
+import { getLocalDate } from '@/lib/utils';
 import DriverListItem from '@/components/DriverListItem';
 import type { DriverAssignment } from '@/types';
 import {
@@ -18,50 +18,78 @@ import {
     MessageSquare,
     Calendar,
     Clock,
+    PackageCheck,
+    SkipForward,
 } from 'lucide-react';
 import Link from 'next/link';
 import * as db from '@/lib/db-supabase';
 import { formatDisplayDate } from '@/lib/utils';
+import { useWhatsAppSender } from '@/hooks/useWhatsAppSender';
+import { formatDriverAssignmentMessage } from '@/lib/distribution';
 
 export default function DistributionPage() {
     const { cache, dispatch, addLog, config, isLoading } = useApp();
+    const wa = useWhatsAppSender(addLog);
+    const [driverPhones, setDriverPhones] = useState<Record<string, string>>({});
     const [isCalculating, setIsCalculating] = useState(false);
     const [isSending, setIsSending] = useState(false);
+    const [confirmMarkAll, setConfirmMarkAll] = useState(false);
+    const [isMarkingAll, setIsMarkingAll] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [targetDate, setTargetDate] = useState(getTomorrowDate());
-    const [balanceCount, setBalanceCount] = useState(0);
-    const [loadingBalances, setLoadingBalances] = useState(false);
+    const [targetDate, setTargetDate] = useState(() => {
+        const distDate = cache.lastDistribution?.targetDate;
+        const tomorrow = getTomorrowDate();
+        // Only use the cached distribution's date if it's tomorrow or later
+        return distDate && distDate >= tomorrow ? distDate : tomorrow;
+    });
     const [pendingCount, setPendingCount] = useState<number | null>(null);
+    const [loadingPending, setLoadingPending] = useState(false);
 
     const hasData = cache.orders.length > 0 && cache.drivers.length > 0;
     const distribution = cache.lastDistribution;
 
-    const today = new Date().toISOString().split('T')[0];
+    const today = getLocalDate();
     const overdueOrders = cache.orders.filter(
         (o) => (!o.status || o.status === 'pending') && o.date < today
     );
 
     useEffect(() => {
-        loadBalancesForDate();
+        wa.checkStatus();
+        loadDriverPhones();
+    }, []);
+
+    useEffect(() => {
+        if (distribution?.targetDate && distribution.targetDate >= getTomorrowDate()) {
+            setTargetDate(distribution.targetDate);
+        }
+    }, [distribution?.targetDate]);
+
+    useEffect(() => {
+        loadPendingCount();
     }, [targetDate]);
 
-    const loadBalancesForDate = async () => {
-        setLoadingBalances(true);
+    async function loadDriverPhones() {
         try {
-            const [balances, count] = await Promise.all([
-                getPendingBalancesForDate(targetDate),
-                db.getPendingOrderCountForDate(targetDate),
-            ]);
-            setBalanceCount(balances.length);
-            setPendingCount(count);
-
-            if (balances.length > 0) {
-                addLog('info', `Found ${balances.length} pending balance(s) for ${targetDate}`);
+            const drivers = await db.getAllDrivers();
+            const phones: Record<string, string> = {};
+            for (const d of drivers) {
+                if (d.phone) phones[d.id] = d.phone;
             }
+            setDriverPhones(phones);
+        } catch {
+            // non-critical
+        }
+    }
+
+    const loadPendingCount = async () => {
+        setLoadingPending(true);
+        try {
+            const count = await db.getPendingOrderCountForDate(targetDate);
+            setPendingCount(count);
         } catch (error) {
-            console.error('Error loading balances:', error);
+            console.error('Error loading pending count:', error);
         } finally {
-            setLoadingBalances(false);
+            setLoadingPending(false);
         }
     };
 
@@ -74,18 +102,9 @@ export default function DistributionPage() {
         try {
             addLog('info', `Calculating distribution for ${targetDate}...`);
 
-            const balances = await getPendingBalancesForDate(targetDate);
             const pendingOrders = cache.orders.filter(o => !o.status || o.status === 'pending');
-            let ordersToDistribute = pendingOrders;
-
-            if (balances.length > 0) {
-                const balanceOrders = await convertBalancesToOrders(balances);
-                ordersToDistribute = [...balanceOrders, ...pendingOrders];
-                addLog('info', `Merged ${balances.length} pending balance(s) with ${pendingOrders.length} pending order(s)`);
-            }
-
             const activeDrivers = cache.drivers.filter(d => d.is_active !== false);
-            const result = calculateDistribution(ordersToDistribute, activeDrivers, targetDate);
+            const result = calculateDistribution(pendingOrders, activeDrivers, targetDate);
             const distributionId = await db.saveDistribution(result);
 
             const orderDriverMap = result.assignments.flatMap(a =>
@@ -97,25 +116,16 @@ export default function DistributionPage() {
                 dispatch({ type: 'SET_ORDERS', payload: updatedOrders });
             }
 
-            if (result.pendingBalances && result.pendingBalances.length > 0) {
-                const balanceResult = await batchCreateBalances(result.pendingBalances, distributionId);
-                if (balanceResult.success) {
-                    addLog('success', `Created ${balanceResult.created} pending balance(s) for next day`);
-                } else {
-                    addLog('warning', `Balance creation had errors: ${balanceResult.errors.join(', ')}`);
-                }
-            }
-
-            dispatch({ type: 'SET_DISTRIBUTION', payload: result });
-            await loadBalancesForDate();
+            dispatch({ type: 'SET_DISTRIBUTION', payload: { ...result, id: distributionId } });
+            await loadPendingCount();
 
             addLog(
                 'success',
                 `Distribution calculated: ${result.summary.assignedDrivers} drivers assigned to ${result.summary.totalZones} zones`
             );
 
-            if (result.summary.balancesCreated && result.summary.balancesCreated > 0) {
-                addLog('info', `${result.summary.balancesCreated} order(s) created pending balances for next day`);
+            if (result.summary.skippedOrders && result.summary.skippedOrders > 0) {
+                addLog('warning', `${result.summary.skippedOrders} order(s) could not be assigned — no driver had enough capacity`);
             }
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Failed to calculate distribution';
@@ -127,52 +137,134 @@ export default function DistributionPage() {
     };
 
     const handleMarkDelivered = async (assignment: DriverAssignment) => {
-        const orderIds = assignment.orders.map(o => o.id).filter(Boolean);
-        if (orderIds.length === 0) return;
         try {
-            await db.markOrdersAsCompleted(orderIds, assignment.driver.id);
-            const updatedOrders = await db.getAllOrders();
-            dispatch({ type: 'SET_ORDERS', payload: updatedOrders });
-            addLog('success', `Marked ${orderIds.length} order(s) as delivered for ${assignment.driver.name}`);
+            // Mark orders as completed in DB (best-effort — IDs may not exist for balance orders)
+            const orderIds = assignment.orders.map(o => o.id).filter(Boolean);
+            if (orderIds.length > 0) {
+                await db.markOrdersAsCompleted(orderIds, assignment.driver.id);
+                const updatedOrders = await db.getAllOrders();
+                dispatch({ type: 'SET_ORDERS', payload: updatedOrders });
+            }
+
+            // Persist isDelivered on the assignment itself so it survives refresh
+            if (distribution?.id) {
+                const updatedAssignments = distribution.assignments.map(a =>
+                    a.driver.id === assignment.driver.id ? { ...a, isDelivered: true } : a
+                );
+                await db.updateDistributionAssignments(distribution.id, updatedAssignments);
+                dispatch({
+                    type: 'SET_DISTRIBUTION',
+                    payload: { ...distribution, assignments: updatedAssignments },
+                });
+            }
+
+            addLog('success', `Marked ${assignment.driver.name}'s orders as delivered`);
         } catch (err: any) {
             addLog('error', `Failed to mark delivered for ${assignment.driver.name}`, err.message);
             throw err;
         }
     };
 
+    const handleMarkAllDelivered = async () => {
+        if (!distribution?.id) return;
+        setIsMarkingAll(true);
+        setConfirmMarkAll(false);
+        try {
+            const pending = distribution.assignments.filter(a => !a.isDelivered);
+            const allOrderIds = pending.flatMap(a => a.orders.map(o => o.id).filter(Boolean));
+            if (allOrderIds.length > 0) {
+                await db.markOrdersAsCompleted(allOrderIds);
+                const updatedOrders = await db.getAllOrders();
+                dispatch({ type: 'SET_ORDERS', payload: updatedOrders });
+            }
+            const updatedAssignments = distribution.assignments.map(a => ({ ...a, isDelivered: true }));
+            await db.updateDistributionAssignments(distribution.id, updatedAssignments);
+            dispatch({ type: 'SET_DISTRIBUTION', payload: { ...distribution, assignments: updatedAssignments } });
+            addLog('success', `Marked all ${pending.length} driver assignment(s) as delivered`);
+        } catch (err: any) {
+            addLog('error', 'Failed to mark all as delivered', err.message);
+        } finally {
+            setIsMarkingAll(false);
+        }
+    };
+
     const handleSendWhatsApp = async () => {
-        if (!distribution || config.adminNumbers.length === 0) {
+        if (!distribution) return;
+
+        const recipients = config.autoMessageRecipients || 'drivers';
+        const sendToDrivers = recipients === 'drivers' || recipients === 'both';
+        const sendToAdmins = recipients === 'admins' || recipients === 'both';
+
+        if (sendToAdmins && config.adminNumbers.length === 0) {
             addLog('warning', 'No admin numbers configured. Please add them in Admin Settings.');
-            return;
         }
 
         setIsSending(true);
         setError(null);
 
         try {
-            addLog('info', 'Sending distribution report via WhatsApp...');
-            const message = formatDistributionMessage(distribution);
+            let driverSuccess = 0, driverFail = 0;
+            let adminSuccess = 0, adminFail = 0;
 
-            let successCount = 0;
-            let failCount = 0;
-
-            for (const recipient of config.adminNumbers) {
-                try {
-                    await db.addWhatsAppMessage(recipient, message);
-                    const response = await fetch('/api/whatsapp/send', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ recipient, message }),
-                    });
-                    if (response.ok) successCount++;
-                    else failCount++;
-                } catch {
-                    failCount++;
+            // Send to drivers
+            if (sendToDrivers) {
+                for (const assignment of distribution.assignments) {
+                    const phone = driverPhones[assignment.driver.id];
+                    if (!phone) continue;
+                    try {
+                        const message = formatDriverAssignmentMessage(assignment);
+                        await db.addWhatsAppMessage(phone, message, distribution.id);
+                        const response = await fetch('/api/whatsapp/send', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ recipient: phone, message }),
+                        });
+                        if (response.ok) driverSuccess++;
+                        else driverFail++;
+                    } catch {
+                        driverFail++;
+                    }
                 }
             }
 
-            if (successCount > 0) addLog('success', `Distribution report sent to ${successCount} admin number(s)`);
-            if (failCount > 0) addLog('warning', `Failed to send to ${failCount} number(s)`);
+            // Send admin report
+            if (sendToAdmins && config.adminNumbers.length > 0) {
+                const adminMessage = formatDistributionMessage(distribution);
+                for (const recipient of config.adminNumbers) {
+                    try {
+                        await db.addWhatsAppMessage(recipient, adminMessage, distribution.id);
+                        const response = await fetch('/api/whatsapp/send', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ recipient, message: adminMessage }),
+                        });
+                        if (response.ok) adminSuccess++;
+                        else adminFail++;
+                    } catch {
+                        adminFail++;
+                    }
+                }
+
+                // Send skipped orders alert separately if any
+                if (distribution.skippedOrders && distribution.skippedOrders.length > 0) {
+                    const { formatSkippedOrdersMessage } = await import('@/lib/distribution');
+                    const skippedMsg = formatSkippedOrdersMessage(distribution.skippedOrders);
+                    for (const recipient of config.adminNumbers) {
+                        try {
+                            await fetch('/api/whatsapp/send', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ recipient, message: skippedMsg }),
+                            });
+                        } catch { /* non-critical */ }
+                    }
+                }
+            }
+
+            if (driverSuccess > 0) addLog('success', `Assignment sent to ${driverSuccess} driver(s)`);
+            if (driverFail > 0) addLog('warning', `Failed to send to ${driverFail} driver(s) — check phone numbers`);
+            if (adminSuccess > 0) addLog('success', `Distribution report sent to ${adminSuccess} admin(s)`);
+            if (adminFail > 0) addLog('warning', `Failed to send to ${adminFail} admin number(s)`);
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Failed to send messages';
             setError(message);
@@ -255,7 +347,7 @@ export default function DistributionPage() {
                         <Package className="w-4 h-4 text-zinc-400 shrink-0" />
                         <div>
                             <p className="text-xs text-zinc-400 uppercase tracking-wider mb-0.5">Pending orders</p>
-                            {pendingCount === null || loadingBalances ? (
+                            {pendingCount === null || loadingPending ? (
                                 <div className="h-4 w-16 rounded bg-zinc-800 animate-pulse" />
                             ) : (
                                 <p className={`text-sm font-semibold tabular-nums ${pendingCount > 0 ? 'text-emerald-400' : 'text-zinc-400'}`}>
@@ -264,38 +356,6 @@ export default function DistributionPage() {
                             )}
                         </div>
                     </div>
-
-                    {/* Balances */}
-                    <div className="flex items-center gap-3 px-5 py-4">
-                        <Clock className="w-4 h-4 text-zinc-400 shrink-0" />
-                        <div>
-                            <p className="text-xs text-zinc-400 uppercase tracking-wider mb-0.5">Pending balances</p>
-                            {loadingBalances ? (
-                                <div className="h-4 w-16 rounded bg-zinc-800 animate-pulse" />
-                            ) : balanceCount > 0 ? (
-                                <div className="flex items-center gap-2">
-                                    <p className="text-sm font-semibold text-amber-400 tabular-nums">
-                                        {balanceCount} balance{balanceCount !== 1 ? 's' : ''}
-                                    </p>
-                                    <span className="text-xs text-amber-400">high priority</span>
-                                </div>
-                            ) : (
-                                <p className="text-sm text-zinc-400">None</p>
-                            )}
-                        </div>
-                    </div>
-
-                    {balanceCount > 0 && (
-                        <div className="flex items-center px-5 py-4">
-                            <Link
-                                href="/balances"
-                                className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 transition-colors"
-                            >
-                                View balances
-                                <ArrowRight className="w-3 h-3" />
-                            </Link>
-                        </div>
-                    )}
                 </div>
             )}
 
@@ -349,11 +409,6 @@ export default function DistributionPage() {
                     <p className="text-sm text-zinc-400 mb-0.5">
                         {cache.orders.length} orders · {cache.drivers.length} drivers loaded
                     </p>
-                    {balanceCount > 0 && (
-                        <p className="text-xs text-amber-400 mt-1">
-                            + {balanceCount} pending balance{balanceCount !== 1 ? 's' : ''} will be included
-                        </p>
-                    )}
                     <p className="text-xs text-zinc-400 mt-2">
                         Target: {formatDisplayDate(targetDate)}
                     </p>
@@ -370,8 +425,8 @@ export default function DistributionPage() {
                             { label: 'Pallets', value: distribution.summary?.totalPallets || 0, color: 'text-purple-400', icon: Boxes },
                             { label: 'Zones', value: distribution.summary?.totalZones || 0, color: 'text-orange-400', icon: MapPin },
                             { label: 'Drivers', value: distribution.summary?.assignedDrivers || 0, color: 'text-blue-400', icon: Users },
-                            ...(distribution.summary?.balancesCreated !== undefined
-                                ? [{ label: 'Balances', value: distribution.summary.balancesCreated, color: 'text-amber-400', icon: Clock }]
+                            ...(distribution.summary?.skippedOrders
+                                ? [{ label: 'Skipped', value: distribution.summary.skippedOrders, color: 'text-amber-400', icon: SkipForward }]
                                 : []),
                         ].map(({ label, value, color, icon: Icon }) => (
                             <div key={label} className="flex-1 px-4 py-4 text-center">
@@ -403,37 +458,34 @@ export default function DistributionPage() {
                         <span className="text-zinc-400">Capacity-Constrained Priority Routing</span>
                     </div>
 
-                    {/* Pending balances alert */}
-                    {distribution.pendingBalances && distribution.pendingBalances.length > 0 && (
+                    {/* Skipped orders alert */}
+                    {distribution.skippedOrders && distribution.skippedOrders.length > 0 && (
                         <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4">
                             <div className="flex items-start gap-3">
-                                <Clock className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                                <SkipForward className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
                                 <div className="flex-1">
                                     <h3 className="text-sm font-semibold text-amber-300 mb-1">
-                                        {distribution.pendingBalances.length} Pending Balance{distribution.pendingBalances.length !== 1 ? 's' : ''} Created
+                                        {distribution.skippedOrders.length} Order{distribution.skippedOrders.length !== 1 ? 's' : ''} Could Not Be Assigned
                                     </h3>
-                                    <p className="text-xs text-zinc-300 mb-3">
-                                        Orders that exceeded driver capacity — scheduled for the next day.
+                                    <p className="text-xs text-zinc-400 mb-3">
+                                        No driver had enough capacity for these orders. They remain pending and require manual action.
                                     </p>
                                     <div className="space-y-1.5">
-                                        {distribution.pendingBalances.map((balance, idx) => (
+                                        {distribution.skippedOrders.map((order, idx) => (
                                             <div key={idx} className="flex items-center gap-2 text-sm text-zinc-300">
                                                 <span className="w-1 h-1 rounded-full bg-amber-400 shrink-0" />
-                                                <span>Zone {balance.zone}:</span>
-                                                <span className="text-amber-300 font-medium">{balance.remaining_quantity} pallets</span>
-                                                {balance.do_number && (
-                                                    <span className="text-zinc-400">· DO: {balance.do_number}</span>
+                                                <span className="text-zinc-400">Zone {order.zone}:</span>
+                                                <span>{order.pickup || ''}{order.pickup && order.delivery ? ' → ' : ''}{order.delivery || ''}</span>
+                                                <span className="text-amber-300 font-medium">({order.pallets}p)</span>
+                                                {order.do_number && (
+                                                    <span className="text-zinc-500">DO: {order.do_number}</span>
+                                                )}
+                                                {order.priority === 'high' && (
+                                                    <span className="text-xs px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20">HIGH</span>
                                                 )}
                                             </div>
                                         ))}
                                     </div>
-                                    <Link
-                                        href="/balances"
-                                        className="inline-flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 mt-3 transition-colors"
-                                    >
-                                        Manage pending balances
-                                        <ArrowRight className="w-3 h-3" />
-                                    </Link>
                                 </div>
                             </div>
                         </div>
@@ -452,12 +504,39 @@ export default function DistributionPage() {
                             </div>
 
                             <div className="flex items-center gap-3">
-                                {config.adminNumbers.length === 0 && (
-                                    <span className="text-xs text-amber-400">No admin numbers configured</span>
+                                {/* Mark All Delivered */}
+                                {distribution.assignments.some(a => !a.isDelivered) && (
+                                    confirmMarkAll ? (
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs text-zinc-400">Mark all as delivered?</span>
+                                            <button
+                                                onClick={handleMarkAllDelivered}
+                                                disabled={isMarkingAll}
+                                                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-emerald-600 text-white hover:bg-emerald-500 transition-colors disabled:opacity-50"
+                                            >
+                                                {isMarkingAll ? <><RefreshCw className="w-3 h-3 animate-spin" /> Marking…</> : 'Confirm'}
+                                            </button>
+                                            <button
+                                                onClick={() => setConfirmMarkAll(false)}
+                                                className="px-2.5 py-1.5 rounded-lg text-xs font-medium text-zinc-400 bg-zinc-700/50 hover:bg-zinc-700 transition-colors"
+                                            >
+                                                Cancel
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <button
+                                            onClick={() => setConfirmMarkAll(true)}
+                                            disabled={isMarkingAll}
+                                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-zinc-800 text-zinc-300 border border-zinc-700 hover:bg-zinc-700 transition-colors"
+                                        >
+                                            <PackageCheck className="w-3 h-3" />
+                                            Mark All Delivered
+                                        </button>
+                                    )
                                 )}
                                 <button
                                     onClick={handleSendWhatsApp}
-                                    disabled={isSending || config.adminNumbers.length === 0}
+                                    disabled={isSending}
                                     className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                                 >
                                     {isSending ? (
@@ -476,15 +555,8 @@ export default function DistributionPage() {
                         </div>
 
                         {(() => {
-                            const completedOrderIds = new Set(
-                                cache.orders.filter(o => o.status === 'completed').map(o => o.id)
-                            );
-                            const pendingAssignments = (distribution.assignments || []).filter(
-                                a => !a.orders.every(o => completedOrderIds.has(o.id))
-                            );
-                            const deliveredAssignments = (distribution.assignments || []).filter(
-                                a => a.orders.length > 0 && a.orders.every(o => completedOrderIds.has(o.id))
-                            );
+                            const pendingAssignments = (distribution.assignments || []).filter(a => !a.isDelivered);
+                            const deliveredAssignments = (distribution.assignments || []).filter(a => a.isDelivered);
                             return (
                                 <div className="space-y-3">
                                     {pendingAssignments.map((assignment, index) => (
@@ -494,9 +566,16 @@ export default function DistributionPage() {
                                             index={index}
                                             onMarkDelivered={handleMarkDelivered}
                                             initialDelivered={false}
+                                            phone={driverPhones[assignment.driver.id]}
+                                            sendState={wa.sendStates[assignment.driver.id]}
+                                            onSend={() => {
+                                                const phone = driverPhones[assignment.driver.id];
+                                                const message = formatDriverAssignmentMessage(assignment);
+                                                wa.sendMessage(phone, message, assignment.driver.id, `Sent assignment to ${assignment.driver.name}`);
+                                            }}
                                         />
                                     ))}
-                                    {deliveredAssignments.length > 0 && (distribution.targetDate ?? '') >= today && (
+                                    {deliveredAssignments.length > 0 && (
                                         <div className="border border-zinc-800 rounded-xl px-4 py-3">
                                             <p className="text-xs text-zinc-500 flex items-center gap-2">
                                                 <span className="text-emerald-400">✓</span>

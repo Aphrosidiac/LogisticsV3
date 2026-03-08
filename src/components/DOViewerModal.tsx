@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Download, FileText } from 'lucide-react';
 
 interface DOViewerModalProps {
@@ -41,13 +42,13 @@ export default function DOViewerModal({ url, filename, onClose }: DOViewerModalP
         };
     }, [onClose]);
 
-    return (
+    return createPortal(
         <div
             className="fixed inset-0 z-50 flex items-center justify-center p-4"
             onClick={onClose}
         >
             {/* Backdrop */}
-            <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
+            <div className="absolute inset-0 modal-backdrop backdrop-blur-sm" />
 
             {/* Modal */}
             <div
@@ -112,6 +113,7 @@ export default function DOViewerModal({ url, filename, onClose }: DOViewerModalP
                     )}
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 }

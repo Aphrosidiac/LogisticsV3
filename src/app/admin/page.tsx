@@ -3,11 +3,10 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useApp } from '@/context/AppContext';
-import { formatDistributionMessage, formatDriverAssignmentMessage } from '@/lib/distribution';
+import { formatDistributionMessage } from '@/lib/distribution';
 import { formatPhoneNumber, validatePhoneNumber, formatDisplayDate } from '@/lib/utils';
 import * as db from '@/lib/db-supabase';
 import { useWhatsAppSender } from '@/hooks/useWhatsAppSender';
-import { useMarkDelivered } from '@/hooks/useMarkDelivered';
 import {
     Phone,
     Plus,
@@ -16,33 +15,19 @@ import {
     AlertCircle,
     Loader,
     WifiOff,
-    Users,
     Megaphone,
-    Pencil,
     X,
     Check,
     MessageSquare,
-    ChevronRight,
     Clock,
-    PackageCheck,
     RefreshCw,
 } from 'lucide-react';
 
 export default function AdminPage() {
-    const { config, cache, dispatch, addLog, saveAdminNumbers, isLoading } = useApp();
+    const { config, cache, dispatch, addLog, saveAdminNumbers } = useApp();
 
     // WhatsApp sender hook
     const wa = useWhatsAppSender(addLog);
-
-    // Mark delivered hook
-    const { deliveredDrivers, markingDriverId, markDelivered } = useMarkDelivered(addLog);
-
-    // Driver phone numbers (keyed by driver id)
-    const [driverPhones, setDriverPhones] = useState<Record<string, string>>({});
-    const [editingId, setEditingId] = useState<string | null>(null);
-    const [editValue, setEditValue] = useState('');
-    const [editError, setEditError] = useState<string | null>(null);
-    const [savingId, setSavingId] = useState<string | null>(null);
 
     // Admin numbers management
     const [phoneInput, setPhoneInput] = useState('');
@@ -54,81 +39,18 @@ export default function AdminPage() {
     const [isSavingSchedule, setIsSavingSchedule] = useState(false);
     const [scheduleSaved, setScheduleSaved] = useState(false);
 
-    const assignments = cache.lastDistribution?.assignments || [];
+    // Reset distribution timer
+    const [isResetting, setIsResetting] = useState(false);
+    const [resetDone, setResetDone] = useState(false);
 
     useEffect(() => {
         wa.checkStatus();
-        loadDriverPhones();
     }, []);
 
     useEffect(() => {
         if (config.distributionTime) setDistributionTime(config.distributionTime);
         if (config.autoMessageRecipients) setAutoRecipients(config.autoMessageRecipients);
     }, [config.distributionTime, config.autoMessageRecipients]);
-
-    async function loadDriverPhones() {
-        try {
-            const drivers = await db.getAllDrivers();
-            const phones: Record<string, string> = {};
-            for (const d of drivers) {
-                if (d.phone) phones[d.id] = d.phone;
-            }
-            setDriverPhones(phones);
-        } catch {
-            // non-critical
-        }
-    }
-
-    // ── Driver phone editing ────────────────────────────────────────────────
-
-    function startEdit(driverId: string) {
-        setEditingId(driverId);
-        setEditValue(driverPhones[driverId] || '');
-        setEditError(null);
-    }
-
-    function cancelEdit() {
-        setEditingId(null);
-        setEditValue('');
-        setEditError(null);
-    }
-
-    async function savePhone(driverId: string) {
-        const cleaned = formatPhoneNumber(editValue);
-        if (!validatePhoneNumber(cleaned)) {
-            setEditError('Enter a valid phone number (e.g. 60123456789)');
-            return;
-        }
-
-        setSavingId(driverId);
-        try {
-            await db.updateDriver(driverId, { phone: cleaned });
-            setDriverPhones(prev => ({ ...prev, [driverId]: cleaned }));
-            setEditingId(null);
-            setEditValue('');
-        } catch {
-            setEditError('Failed to save. Try again.');
-        } finally {
-            setSavingId(null);
-        }
-    }
-
-    // ── Per-driver send ─────────────────────────────────────────────────────
-
-    async function sendToDriver(driverId: string, driverName: string, phone: string, assignment: any) {
-        const message = formatDriverAssignmentMessage(assignment);
-        await wa.sendMessage(phone, message, driverId, `Sent assignment to ${driverName}`);
-    }
-
-    async function sendAll() {
-        const eligible = assignments.filter(a => driverPhones[a.driver.id]);
-        for (const assignment of eligible) {
-            const phone = driverPhones[assignment.driver.id];
-            const message = formatDriverAssignmentMessage(assignment);
-            await wa.sendMessage(phone, message, assignment.driver.id, `Sent assignment to ${assignment.driver.name}`);
-            await new Promise(r => setTimeout(r, 400));
-        }
-    }
 
     // ── Admin broadcast ─────────────────────────────────────────────────────
 
@@ -161,6 +83,25 @@ export default function AdminPage() {
         addLog('info', `Removed admin number: ${phone}`);
     }
 
+    // ── Reset distribution timer ─────────────────────────────────────────────
+
+    async function resetDistributionTimer() {
+        setIsResetting(true);
+        try {
+            const res = await fetch('/api/cron/reset-distribution', { method: 'POST' });
+            const data = await res.json();
+            if (!data.success) throw new Error(data.error);
+            dispatch({ type: 'SET_CONFIG', payload: { ...config, lastAutoDistributionDate: undefined } });
+            addLog('info', 'Distribution timer reset — cron will run again today');
+            setResetDone(true);
+            setTimeout(() => setResetDone(false), 3000);
+        } catch (err: any) {
+            addLog('error', 'Failed to reset distribution timer', err.message);
+        } finally {
+            setIsResetting(false);
+        }
+    }
+
     // ── Distribution schedule ────────────────────────────────────────────────
 
     async function saveSchedule() {
@@ -179,33 +120,13 @@ export default function AdminPage() {
         }
     }
 
-    // ── Helpers ─────────────────────────────────────────────────────────────
-
-    const eligibleCount = assignments.filter(a => driverPhones[a.driver.id]).length;
-
-    function sendButtonContent(driverId: string) {
-        const state = wa.sendStates[driverId];
-        if (state?.status === 'sending') return <><Loader className="w-4 h-4 animate-spin" /> Sending…</>;
-        if (state?.status === 'sent')    return <><Check className="w-4 h-4" /> Sent</>;
-        if (state?.status === 'failed')  return <><X className="w-4 h-4" /> Failed</>;
-        return <><Send className="w-4 h-4" /> Send</>;
-    }
-
-    function sendButtonClass(driverId: string) {
-        const s = wa.sendStates[driverId]?.status;
-        if (s === 'sent')    return 'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 cursor-default';
-        if (s === 'failed')  return 'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-rose-500/20 text-rose-400 border border-rose-500/30 cursor-default';
-        if (s === 'sending') return 'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-zinc-700 text-zinc-400 cursor-wait';
-        return 'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-600 text-white hover:bg-emerald-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed';
-    }
-
     return (
         <div className="space-y-8 animate-fadeIn">
             {/* Header */}
             <div>
                 <h1 className="text-3xl font-bold text-white">Admin Settings</h1>
                 <p className="text-zinc-500 mt-1">
-                    Manage driver phones and send WhatsApp assignments
+                    Manage WhatsApp, distribution schedule, and admin settings
                 </p>
             </div>
 
@@ -223,178 +144,7 @@ export default function AdminPage() {
                 </div>
             )}
 
-            {/* ── Section 1: Driver Dispatch ── */}
-            <div className="card p-6 space-y-5">
-                <div className="flex items-start justify-between">
-                    <div>
-                        <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-                            <Users className="w-5 h-5 text-emerald-400" />
-                            Driver Dispatch
-                        </h2>
-                        <p className="text-sm text-zinc-500 mt-0.5">
-                            Send each driver their individual assignment via WhatsApp
-                        </p>
-                    </div>
-                    {assignments.length > 0 && eligibleCount > 0 && (
-                        <button
-                            onClick={sendAll}
-                            disabled={!wa.waConnected}
-                            className="btn-primary flex items-center gap-2 text-sm shrink-0"
-                        >
-                            <Send className="w-4 h-4" />
-                            Send All ({eligibleCount})
-                        </button>
-                    )}
-                </div>
-
-                {isLoading ? (
-                    <div className="flex items-center justify-center py-6">
-                        <RefreshCw className="w-5 h-5 animate-spin text-zinc-500" />
-                    </div>
-                ) : assignments.length === 0 ? (
-                    <div className="flex items-center gap-3 bg-zinc-800/50 border border-zinc-700 rounded-xl px-4 py-4">
-                        <AlertCircle className="w-5 h-5 text-zinc-500 shrink-0" />
-                        <div>
-                            <p className="text-sm text-zinc-400">No distribution calculated yet.</p>
-                            <Link
-                                href="/distribution"
-                                className="text-xs text-emerald-400 hover:text-emerald-300 flex items-center gap-1 mt-0.5"
-                            >
-                                Go to Distribution <ChevronRight className="w-3 h-3" />
-                            </Link>
-                        </div>
-                    </div>
-                ) : (
-                    <div className="space-y-3">
-                        {assignments.map((assignment) => {
-                            const driverId = assignment.driver.id;
-                            const phone = driverPhones[driverId];
-                            const isEditing = editingId === driverId;
-                            const sendState = wa.sendStates[driverId]?.status;
-                            const canSend = !!phone && wa.waConnected && sendState !== 'sending';
-
-                            return (
-                                <div
-                                    key={driverId}
-                                    className="border border-zinc-700 bg-zinc-800/40 rounded-xl p-4"
-                                >
-                                    <div className="flex flex-wrap items-start justify-between gap-3">
-                                        {/* Driver info */}
-                                        <div className="min-w-0">
-                                            <div className="flex items-center gap-2">
-                                                <span className="font-medium text-white">{assignment.driver.name}</span>
-                                                <span className="text-xs text-zinc-500 bg-zinc-800 px-1.5 py-0.5 rounded">
-                                                    {assignment.driver.identifier}
-                                                </span>
-                                            </div>
-                                            <p className="text-xs text-zinc-400 mt-0.5">
-                                                Zones: {assignment.zones.join(', ')} &nbsp;·&nbsp;{' '}
-                                                {assignment.totalPallets} pallets · {assignment.totalOrders} orders
-                                            </p>
-                                        </div>
-
-                                        {/* Phone + send */}
-                                        <div className="flex items-center gap-2 shrink-0">
-                                            {isEditing ? (
-                                                <div className="flex flex-col gap-1">
-                                                    <div className="flex items-center gap-2">
-                                                        <input
-                                                            type="tel"
-                                                            value={editValue}
-                                                            onChange={e => { setEditValue(e.target.value); setEditError(null); }}
-                                                            onKeyDown={e => { if (e.key === 'Enter') savePhone(driverId); if (e.key === 'Escape') cancelEdit(); }}
-                                                            placeholder="60123456789"
-                                                            className="input text-sm py-1 w-40"
-                                                            autoFocus
-                                                        />
-                                                        <button
-                                                            onClick={() => savePhone(driverId)}
-                                                            disabled={savingId === driverId}
-                                                            className="p-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-500 transition-colors disabled:opacity-50"
-                                                        >
-                                                            {savingId === driverId
-                                                                ? <Loader className="w-4 h-4 animate-spin" />
-                                                                : <Check className="w-4 h-4" />
-                                                            }
-                                                        </button>
-                                                        <button
-                                                            onClick={cancelEdit}
-                                                            className="p-1.5 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700 rounded-lg transition-colors"
-                                                        >
-                                                            <X className="w-4 h-4" />
-                                                        </button>
-                                                    </div>
-                                                    {editError && (
-                                                        <p className="text-xs text-rose-400">{editError}</p>
-                                                    )}
-                                                </div>
-                                            ) : (
-                                                <>
-                                                    {phone ? (
-                                                        <button
-                                                            onClick={() => startEdit(driverId)}
-                                                            className="flex items-center gap-1.5 text-xs text-zinc-300 bg-zinc-700/50 hover:bg-zinc-700 px-2.5 py-1.5 rounded-lg transition-colors"
-                                                        >
-                                                            <Phone className="w-3 h-3" />
-                                                            {phone}
-                                                            <Pencil className="w-3 h-3 text-zinc-500" />
-                                                        </button>
-                                                    ) : (
-                                                        <button
-                                                            onClick={() => startEdit(driverId)}
-                                                            className="flex items-center gap-1.5 text-xs text-zinc-500 bg-zinc-800 hover:bg-zinc-700 px-2.5 py-1.5 rounded-lg border border-dashed border-zinc-600 transition-colors"
-                                                        >
-                                                            <Plus className="w-3 h-3" />
-                                                            Add phone
-                                                        </button>
-                                                    )}
-                                                    <button
-                                                        onClick={() => sendToDriver(driverId, assignment.driver.name, phone, assignment)}
-                                                        disabled={!canSend}
-                                                        className={sendButtonClass(driverId)}
-                                                    >
-                                                        {sendButtonContent(driverId)}
-                                                    </button>
-                                                </>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    {/* Failed error message */}
-                                    {wa.sendStates[driverId]?.status === 'failed' && wa.sendStates[driverId]?.error && (
-                                        <p className="text-xs text-rose-400 mt-2">
-                                            {wa.sendStates[driverId].error}
-                                        </p>
-                                    )}
-
-                                    {/* Mark Delivered */}
-                                    <div className="mt-3 pt-3 border-t border-zinc-700/50 flex justify-end">
-                                        {deliveredDrivers.has(driverId) ? (
-                                            <span className="flex items-center gap-1.5 text-xs text-emerald-400 font-medium">
-                                                <PackageCheck className="w-4 h-4" />
-                                                Marked as Delivered
-                                            </span>
-                                        ) : (
-                                            <button
-                                                onClick={() => markDelivered(assignment, (orders) => dispatch({ type: 'SET_ORDERS', payload: orders }))}
-                                                disabled={markingDriverId === driverId}
-                                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20 transition-colors disabled:opacity-50 disabled:cursor-wait"
-                                            >
-                                                {markingDriverId === driverId
-                                                    ? <><Loader className="w-3.5 h-3.5 animate-spin" /> Marking…</>
-                                                    : <><PackageCheck className="w-3.5 h-3.5" /> Mark as Delivered</>
-                                                }
-                                            </button>
-                                        )}
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                )}
-            </div>
-
-            {/* ── Section 2: Admin Numbers ── */}
+            {/* ── Section 1: Admin Numbers ── */}
             <div className="card p-6 space-y-4">
                 <h2 className="text-lg font-semibold text-white flex items-center gap-2">
                     <Phone className="w-5 h-5 text-zinc-400" />
@@ -584,6 +334,32 @@ export default function AdminPage() {
                         }
                     </span>
                 </p>
+            </div>
+
+            {/* ── Section 5: Reset Distribution Timer ── */}
+            <div className="card p-6 space-y-4 border border-rose-500/20">
+                <div>
+                    <h2 className="text-lg font-semibold text-rose-400 flex items-center gap-2">
+                        <RefreshCw className="w-5 h-5 text-rose-400" />
+                        Reset Distribution Timer
+                    </h2>
+                    <p className="text-sm text-zinc-500 mt-1">
+                        If auto-distribution already ran today and you need to run it again, use this to allow it.
+                    </p>
+                </div>
+                <button
+                    onClick={resetDistributionTimer}
+                    disabled={isResetting}
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-rose-500/10 text-rose-400 border border-rose-500/30 hover:bg-rose-500/20 transition-colors disabled:opacity-50 disabled:cursor-wait"
+                >
+                    {isResetting ? (
+                        <><Loader className="w-4 h-4 animate-spin" /> Resetting…</>
+                    ) : resetDone ? (
+                        <><Check className="w-4 h-4" /> Reset!</>
+                    ) : (
+                        <><RefreshCw className="w-4 h-4" /> Reset Distribution Timer</>
+                    )}
+                </button>
             </div>
         </div>
     );

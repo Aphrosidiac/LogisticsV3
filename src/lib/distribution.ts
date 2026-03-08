@@ -1,8 +1,8 @@
-// Advanced distribution algorithm with capacity constraints, priority routing, and partial fulfillment
-// Supports date-based scheduling, region-based driver assignment, and balance tracking
+// Advanced distribution algorithm with capacity constraints, priority routing, and skip-on-overflow
+// Supports date-based scheduling and region-based driver assignment
 
-import { Order, Driver, DriverAssignment, DistributionResult, PendingBalance } from '@/types';
-import { shuffleArray, generateId } from './utils';
+import { Order, Driver, DriverAssignment, DistributionResult } from '@/types';
+import { shuffleArray, getLocalDate } from './utils';
 
 interface DriverState {
   driver: Driver;
@@ -117,41 +117,13 @@ function findBestDrivers(
 }
 
 /**
- * Create pending balance for partial fulfillment
- */
-function createPendingBalance(
-  order: Order,
-  remainingPallets: number,
-  fulfilledPallets: number,
-  targetDate: string
-): PendingBalance {
-  const nextDay = new Date(targetDate);
-  nextDay.setDate(nextDay.getDate() + 1);
-
-  return {
-    id: generateId(),
-    original_order_id: order.id,
-    zone: order.zone,
-    pickup: order.pickup,
-    delivery: order.delivery,
-    do_number: order.do_number,
-    original_quantity: calculateTotalPallets(order),
-    fulfilled_quantity: fulfilledPallets,
-    remaining_quantity: remainingPallets,
-    original_date: order.date,
-    scheduled_for_date: nextDay.toISOString().split('T')[0],
-    status: 'pending',
-    raw_data: order.rawData,
-  };
-}
-
-/**
  * Get tomorrow's date in YYYY-MM-DD format
  */
 export function getTomorrowDate(): string {
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  return tomorrow.toISOString().split('T')[0];
+  const todayStr = getLocalDate();           // YYYY-MM-DD in MY/SG time
+  const d = new Date(todayStr + 'T12:00:00'); // noon avoids any DST edge cases
+  d.setDate(d.getDate() + 1);
+  return getLocalDate(d);
 }
 
 /**
@@ -210,76 +182,33 @@ export function calculateDistribution(
     });
   }
 
-  // Track pending balances
-  const pendingBalances: PendingBalance[] = [];
-  let totalAssignedPallets = 0;
+  // Track skipped orders (can't be fully assigned to any driver)
+  const skippedOrders: Order[] = [];
 
   // Assign orders to drivers
   for (const order of ordersWithPallets) {
     const orderPallets = order.calculatedPallets;
 
-    // Find best drivers for this zone
+    // Find drivers with any remaining capacity
     const candidates = findBestDrivers(order.zone, driverStates, orderPallets);
 
-    if (candidates.length === 0) {
-      // No drivers available - create full balance
-      pendingBalances.push(
-        createPendingBalance(order, orderPallets, 0, distributionDate)
-      );
+    // Find a driver that can fit the FULL order (respecting region score priority)
+    const fullFitCandidate = candidates.find(c => c.state.remainingCapacity >= orderPallets);
+
+    if (!fullFitCandidate) {
+      // No driver can fit the full order — skip it, leave as pending
+      skippedOrders.push(order);
       continue;
     }
 
-    // Select best available driver
-    const bestDriver = candidates[0].state;
+    const bestDriver = fullFitCandidate.state;
+    bestDriver.orders.push(order);
+    bestDriver.totalPallets += orderPallets;
+    bestDriver.totalOrders += 1;
+    bestDriver.remainingCapacity -= orderPallets;
 
-    if (orderPallets <= bestDriver.remainingCapacity) {
-      // Order fits completely
-      bestDriver.orders.push(order);
-      bestDriver.totalPallets += orderPallets;
-      bestDriver.totalOrders += 1;
-      bestDriver.remainingCapacity -= orderPallets;
-      totalAssignedPallets += orderPallets;
-
-      // Track zone
-      if (!bestDriver.zones.includes(order.zone)) {
-        bestDriver.zones.push(order.zone);
-      }
-    } else if (bestDriver.remainingCapacity > 0) {
-      // Partial fulfillment - assign what fits
-      const assignedPallets = bestDriver.remainingCapacity;
-      const remainingPallets = orderPallets - assignedPallets;
-
-      // Create modified order for this driver
-      const partialOrder = {
-        ...order,
-        pallets: assignedPallets,
-        rawData: {
-          ...order.rawData,
-          _partial: 'true',
-          _original_pallets: orderPallets.toString(),
-        },
-      };
-
-      bestDriver.orders.push(partialOrder);
-      bestDriver.totalPallets += assignedPallets;
-      bestDriver.totalOrders += 1;
-      bestDriver.remainingCapacity = 0;
-      totalAssignedPallets += assignedPallets;
-
-      // Track zone
-      if (!bestDriver.zones.includes(order.zone)) {
-        bestDriver.zones.push(order.zone);
-      }
-
-      // Create balance for remaining
-      pendingBalances.push(
-        createPendingBalance(order, remainingPallets, assignedPallets, distributionDate)
-      );
-    } else {
-      // No capacity - create full balance
-      pendingBalances.push(
-        createPendingBalance(order, orderPallets, 0, distributionDate)
-      );
+    if (!bestDriver.zones.includes(order.zone)) {
+      bestDriver.zones.push(order.zone);
     }
   }
 
@@ -313,13 +242,13 @@ export function calculateDistribution(
   return {
     assignments,
     unassignedDrivers,
-    pendingBalances,
+    skippedOrders,
     summary: {
       totalOrders: filteredOrders.length,
       totalPallets: ordersWithPallets.reduce((sum, o) => sum + o.calculatedPallets, 0),
       totalZones: allZones.size,
       assignedDrivers: assignments.length,
-      balancesCreated: pendingBalances.length,
+      skippedOrders: skippedOrders.length,
     },
     timestamp: new Date().toISOString(),
     targetDate: distributionDate,
@@ -390,15 +319,9 @@ export function formatDistributionMessage(result: DistributionResult): string {
     lines.push('');
   }
 
-  // Pending balances
-  if (result.pendingBalances && result.pendingBalances.length > 0) {
-    lines.push('*Pending Balances (Next Day):*');
-    for (const balance of result.pendingBalances) {
-      lines.push(`   - Zone ${balance.zone}: ${balance.remaining_quantity} pallets remaining`);
-      if (balance.do_number) {
-        lines.push(`     DO: ${balance.do_number}`);
-      }
-    }
+  // Skipped orders (brief mention — detailed alert is a separate message)
+  if (result.skippedOrders && result.skippedOrders.length > 0) {
+    lines.push(`⚠️ *${result.skippedOrders.length} order(s) could not be assigned — see skipped orders alert.*`);
     lines.push('');
   }
 
@@ -409,8 +332,8 @@ export function formatDistributionMessage(result: DistributionResult): string {
   lines.push(`   - Total Pallets: ${result.summary.totalPallets}`);
   lines.push(`   - Zones: ${result.summary.totalZones}`);
   lines.push(`   - Assigned Drivers: ${result.summary.assignedDrivers}`);
-  if (result.summary.balancesCreated) {
-    lines.push(`   - Pending Balances: ${result.summary.balancesCreated}`);
+  if (result.summary.skippedOrders) {
+    lines.push(`   - Skipped Orders: ${result.summary.skippedOrders}`);
   }
   lines.push('================================');
 
@@ -453,5 +376,30 @@ export function formatDriverAssignmentMessage(assignment: DriverAssignment): str
   lines.push('');
   lines.push('_Please confirm receipt of this assignment._');
 
+  return lines.join('\n');
+}
+
+/**
+ * Format a separate WhatsApp alert for orders that couldn't be assigned
+ */
+export function formatSkippedOrdersMessage(skippedOrders: Order[]): string {
+  const lines: string[] = [];
+
+  lines.push('⚠️ *SKIPPED ORDERS — ACTION REQUIRED*');
+  lines.push('================================');
+  lines.push(`${skippedOrders.length} order${skippedOrders.length !== 1 ? 's' : ''} could not be assigned — no driver had enough capacity to take the full order.`);
+  lines.push('These orders remain *pending* and require manual action.');
+  lines.push('');
+
+  for (const order of skippedOrders) {
+    const route = order.pickup && order.delivery
+      ? `${order.pickup} → ${order.delivery}`
+      : order.delivery || order.pickup || 'N/A';
+    const doText = order.do_number ? ` [DO: ${order.do_number}]` : '';
+    const priorityText = order.priority === 'high' ? ' ⚠️ HIGH' : '';
+    lines.push(`• Zone ${order.zone}: ${route} (${order.pallets} pallet${order.pallets !== 1 ? 's' : ''})${doText}${priorityText}`);
+  }
+
+  lines.push('================================');
   return lines.join('\n');
 }
