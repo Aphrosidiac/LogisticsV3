@@ -19,6 +19,8 @@ export async function getAllClients(): Promise<Client[]> {
       item_type: row.item_type || undefined,
       delivery_locations: row.delivery_locations || [],
       notes: row.notes || undefined,
+      date: row.date || undefined,
+      attachment_urls: row.attachment_urls || [],
       created_at: row.created_at,
       updated_at: row.updated_at,
     }));
@@ -39,6 +41,8 @@ export async function addClient(client: Partial<Client>): Promise<Client> {
       item_type: client.item_type || null,
       delivery_locations: client.delivery_locations || [],
       notes: client.notes || null,
+      date: client.date || null,
+      attachment_urls: client.attachment_urls || [],
     };
 
     const { error } = await supabase.from(TABLES.CLIENTS).insert(row);
@@ -60,6 +64,8 @@ export async function updateClient(id: string, updates: Partial<Client>) {
     if (updates.item_type !== undefined) payload.item_type = updates.item_type || null;
     if (updates.delivery_locations !== undefined) payload.delivery_locations = updates.delivery_locations;
     if (updates.notes !== undefined) payload.notes = updates.notes || null;
+    if (updates.date !== undefined) payload.date = updates.date || null;
+    if (updates.attachment_urls !== undefined) payload.attachment_urls = updates.attachment_urls;
 
     const { error } = await supabase.from(TABLES.CLIENTS).update(payload).eq('id', id);
     if (error) throw error;

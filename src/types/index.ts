@@ -173,6 +173,8 @@ export interface Client {
   item_type?: string;
   delivery_locations: string[];
   notes?: string;
+  date?: string;
+  attachment_urls?: string[];
   created_at?: string;
   updated_at?: string;
 }

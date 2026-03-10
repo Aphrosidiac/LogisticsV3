@@ -183,6 +183,68 @@ export async function deleteOrderAttachments(orderId: string): Promise<boolean> 
 }
 
 /**
+ * Upload a client attachment (images only)
+ */
+export async function uploadClientAttachment(
+  clientId: string,
+  file: File
+): Promise<FileUploadResult> {
+  try {
+    const validationError = validateFile(file, true);
+    if (validationError) {
+      return { success: false, error: validationError };
+    }
+
+    const timestamp = Date.now();
+    const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+    const filePath = `clients/${clientId}/${timestamp}-${sanitizedName}`;
+
+    const { error } = await supabase.storage
+      .from(ORDER_ATTACHMENTS_BUCKET)
+      .upload(filePath, file, { cacheControl: '3600', upsert: false });
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    const { data: urlData } = supabase.storage
+      .from(ORDER_ATTACHMENTS_BUCKET)
+      .getPublicUrl(filePath);
+
+    return { success: true, url: urlData.publicUrl };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Upload failed' };
+  }
+}
+
+/**
+ * Delete all attachments for a client
+ */
+export async function deleteClientAttachments(clientId: string): Promise<boolean> {
+  try {
+    const { data: files, error: listError } = await supabase.storage
+      .from(ORDER_ATTACHMENTS_BUCKET)
+      .list(`clients/${clientId}`);
+
+    if (listError || !files || files.length === 0) return true;
+
+    const filePaths = files.map((file) => `clients/${clientId}/${file.name}`);
+    const { error: deleteError } = await supabase.storage
+      .from(ORDER_ATTACHMENTS_BUCKET)
+      .remove(filePaths);
+
+    if (deleteError) {
+      console.error('Error deleting client attachments:', deleteError);
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.error('Error deleting client attachments:', error);
+    return false;
+  }
+}
+
+/**
  * Get file extension from filename
  */
 export function getFileExtension(filename: string): string {
