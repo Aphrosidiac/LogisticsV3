@@ -6,13 +6,10 @@ const SECRET = process.env.AUTH_SECRET || 'logistics-secret-change-in-production
 const COOKIE_NAME = 'logistics_session';
 const MAX_AGE = 60 * 60 * 24 * 7; // 7 days
 
-// Single hardcoded admin user
-// Password is bcrypt hash of "abc123"
 export const ADMIN_USER = {
-  username: 'shudalogistics',
-  email: 'test@gmail.com',
-  // bcrypt hash of "abc123", rounds=10
-  passwordHash: '$2b$10$D0FkyKIXrad7Wnf0dQUsRui3WjKa6.yWkk0LRdx81hDZy5tb0jZvW',
+  username: process.env.ADMIN_USERNAME || 'shudalogistics',
+  email: process.env.ADMIN_EMAIL || 'test@gmail.com',
+  passwordHash: process.env.ADMIN_PASSWORD_HASH || '$2b$10$D0FkyKIXrad7Wnf0dQUsRui3WjKa6.yWkk0LRdx81hDZy5tb0jZvW',
 };
 
 function sign(payload: string): string {
