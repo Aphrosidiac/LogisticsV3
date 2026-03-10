@@ -9,7 +9,7 @@ const MAX_AGE = 60 * 60 * 24 * 7; // 7 days
 export const ADMIN_USER = {
   username: process.env.ADMIN_USERNAME || 'shudalogistics',
   email: process.env.ADMIN_EMAIL || 'test@gmail.com',
-  passwordHash: process.env.ADMIN_PASSWORD_HASH || '$2b$10$D0FkyKIXrad7Wnf0dQUsRui3WjKa6.yWkk0LRdx81hDZy5tb0jZvW',
+  passwordHash: process.env.ADMIN_PASSWORD_HASH || '$2b$10$pW4aQUkIbdU/2sizuS9xO.PpxeRtZUXd6KJsKYM1MJVWqVugyyB5O',
 };
 
 function sign(payload: string): string {
