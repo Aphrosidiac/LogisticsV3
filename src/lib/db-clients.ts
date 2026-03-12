@@ -19,6 +19,8 @@ export async function getAllClients(): Promise<Client[]> {
       delivery_locations: row.delivery_locations || [],
       notes: row.notes || undefined,
       date: row.date || undefined,
+      num_pallet: row.num_pallet ?? 0,
+      num_ctn: row.num_ctn ?? 0,
       attachment_urls: row.attachment_urls || [],
       created_at: row.created_at,
       updated_at: row.updated_at,
@@ -40,6 +42,8 @@ export async function addClient(client: Partial<Client>): Promise<Client> {
       delivery_locations: client.delivery_locations || [],
       notes: client.notes || null,
       date: client.date || null,
+      num_pallet: client.num_pallet ?? 0,
+      num_ctn: client.num_ctn ?? 0,
       attachment_urls: client.attachment_urls || [],
     };
 
@@ -65,6 +69,8 @@ export async function updateClient(id: string, updates: Partial<Client>) {
     if (updates.delivery_locations !== undefined) payload.delivery_locations = updates.delivery_locations;
     if (updates.notes !== undefined) payload.notes = updates.notes || null;
     if (updates.date !== undefined) payload.date = updates.date || null;
+    if (updates.num_pallet !== undefined) payload.num_pallet = updates.num_pallet ?? 0;
+    if (updates.num_ctn !== undefined) payload.num_ctn = updates.num_ctn ?? 0;
     if (updates.attachment_urls !== undefined) payload.attachment_urls = updates.attachment_urls;
 
     const { error } = await supabase.from(TABLES.CLIENTS).update(payload).eq('id', id);

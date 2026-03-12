@@ -183,6 +183,8 @@ export interface Client {
   delivery_locations: string[];
   notes?: string;
   date?: string;
+  num_pallet?: number;
+  num_ctn?: number;
   attachment_urls?: string[];
   created_at?: string;
   updated_at?: string;
