@@ -38,6 +38,7 @@ export const TABLES = {
   WHATSAPP_MESSAGES: 'whatsapp_messages',
   RECEIPTS: 'receipts',
   CLIENTS: 'clients',
+  SPECIAL_ZONES: 'special_zones',
 } as const;
 
 // SQL Schema for Supabase tables

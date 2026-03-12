@@ -1,9 +1,9 @@
 'use client';
 
 import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
-import { AppConfig, AppCache, LogEntry, Order, Driver, DistributionResult, ZoneWithDistricts } from '@/types';
+import { AppConfig, AppCache, LogEntry, Order, Driver, DistributionResult, ZoneWithDistricts, SpecialZone } from '@/types';
 import * as db from '@/lib/db-supabase';
-import { getZonesWithDistricts } from '@/lib/db-zones';
+import { getZonesWithDistricts, getAllSpecialZones } from '@/lib/db-zones';
 
 interface AppContextState {
     config: AppConfig;
@@ -36,6 +36,7 @@ const initialState: AppContextState = {
         orders: [],
         drivers: [],
         zones: [],
+        specialZones: [],
         lastDistribution: null,
         lastFetch: null,
     },
@@ -95,6 +96,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 const orders = await db.getAllOrders();
                 const drivers = await db.getAllDrivers();
                 const zones = await getZonesWithDistricts(true);
+                const specialZones = (await getAllSpecialZones()).filter(sz => sz.is_active);
                 const latestDist = await db.getLatestDistribution();
                 const logs = await db.getAllLogs();
 
@@ -105,6 +107,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
                         orders,
                         drivers,
                         zones,
+                        specialZones,
                         lastDistribution: latestDist || null,
                         lastFetch: new Date().toISOString(),
                     },

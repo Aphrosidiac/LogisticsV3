@@ -1,5 +1,5 @@
 import { supabase, TABLES } from './supabase';
-import { Zone, District, ZoneWithDistricts } from '@/types';
+import { Zone, District, ZoneWithDistricts, SpecialZone } from '@/types';
 
 // ============================================================================
 // Zone Operations
@@ -338,6 +338,76 @@ export async function getZonesWithDistricts(activeOnly = false): Promise<ZoneWit
   } catch (error) {
     console.error('Error fetching zones with districts:', error);
     return [];
+  }
+}
+
+// ============================================================================
+// Special Zone Operations
+// ============================================================================
+
+export async function getAllSpecialZones(): Promise<SpecialZone[]> {
+  try {
+    const { data, error } = await supabase
+      .from(TABLES.SPECIAL_ZONES)
+      .select('*')
+      .order('name', { ascending: true });
+
+    if (error) throw error;
+    return (data || []).map(row => ({
+      ...row,
+      active_days: row.active_days || [],
+    }));
+  } catch (error) {
+    console.error('Error fetching special zones:', error);
+    return [];
+  }
+}
+
+export async function createSpecialZone(
+  zone: Omit<SpecialZone, 'id' | 'created_at' | 'updated_at'>
+): Promise<SpecialZone | null> {
+  try {
+    const { data, error } = await supabase
+      .from(TABLES.SPECIAL_ZONES)
+      .insert(zone)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error('Error creating special zone:', error);
+    return null;
+  }
+}
+
+export async function updateSpecialZone(id: string, updates: Partial<SpecialZone>): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from(TABLES.SPECIAL_ZONES)
+      .update(updates)
+      .eq('id', id);
+
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.error('Error updating special zone:', error);
+    return false;
+  }
+}
+
+export async function deleteSpecialZone(id: string): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from(TABLES.SPECIAL_ZONES)
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.error('Error deleting special zone:', error);
+    return false;
   }
 }
 

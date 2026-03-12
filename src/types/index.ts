@@ -25,6 +25,16 @@ export interface ZoneWithDistricts extends Zone {
   districts: District[];
 }
 
+export interface SpecialZone {
+  id: string;
+  name: string;
+  description?: string;
+  active_days: number[]; // 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat, 7=Sun
+  is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface Order {
   id: string;
   pallets: number;
@@ -183,6 +193,7 @@ export interface AppCache {
   orders: Order[];
   drivers: Driver[];
   zones: ZoneWithDistricts[];
+  specialZones: SpecialZone[];
   lastDistribution: DistributionResult | null;
   lastFetch: string | null;
 }

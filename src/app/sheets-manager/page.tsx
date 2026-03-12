@@ -1102,13 +1102,26 @@ function OrderForm({ initial, saving, onSave, onCancel }: {
     onSave: (data: Partial<Order>, pendingFile: File | null, removeAttachment: boolean) => void;
     onCancel: () => void;
 }) {
-    const [data, setData] = useState<Partial<Order>>(initial);
+    const { cache } = useApp();
+    const zones = cache.zones || [];
+    const specialZones = cache.specialZones || [];
+
+    // On edit: if zone_id is null but zone text matches a special zone, restore the special:: prefix
+    const resolvedInitial = (() => {
+        if (initial.zone && !initial.zone_id) {
+            const match = specialZones.find(sz => sz.name === initial.zone);
+            if (match) {
+                return { ...initial, zone_id: `special::${match.id}` };
+            }
+        }
+        return initial;
+    })();
+
+    const [data, setData] = useState<Partial<Order>>(resolvedInitial);
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [touched, setTouched] = useState<Record<string, boolean>>({});
     const [pendingFile, setPendingFile] = useState<File | null>(null);
     const [removeAttachment, setRemoveAttachment] = useState(false);
-    const { cache } = useApp();
-    const zones = cache.zones || [];
 
     const savedUrl = removeAttachment ? undefined : (initial.attachment_urls?.[0]);
 
@@ -1118,9 +1131,47 @@ function OrderForm({ initial, saving, onSave, onCancel }: {
         setTouched(prev => ({ ...prev, [key]: true }));
     }
 
+    // Get active days for the currently selected special zone (if any)
+    const selectedSpecialZone = data.zone_id?.startsWith('special::')
+        ? specialZones.find(s => s.id === data.zone_id!.replace('special::', ''))
+        : null;
+
+    function isDateAllowed(dateStr: string): boolean {
+        if (!selectedSpecialZone) return true;
+        const d = new Date(dateStr + 'T00:00:00');
+        // JS getDay: 0=Sun, 1=Mon ... 6=Sat → convert to our format: 1=Mon ... 7=Sun
+        const jsDay = d.getDay();
+        const dayNum = jsDay === 0 ? 7 : jsDay;
+        return selectedSpecialZone.active_days.includes(dayNum);
+    }
+
+    function handleDateChange(v: string) {
+        set('date', v);
+        if (v && selectedSpecialZone && !isDateAllowed(v)) {
+            setErrors(prev => ({ ...prev, date: 'This date is not an active delivery day for this zone' }));
+            setTouched(prev => ({ ...prev, date: true }));
+        }
+    }
+
     function handleZoneSelect(val: { zone_id: string; district_id: string } | null) {
         if (!val) {
             setData(prev => ({ ...prev, zone_id: undefined, district_id: undefined, zone: '' }));
+        } else if (val.zone_id.startsWith('special::')) {
+            const szId = val.zone_id.replace('special::', '');
+            const sz = specialZones.find(s => s.id === szId);
+            setData(prev => {
+                const next = { ...prev, zone_id: val.zone_id, district_id: undefined, zone: sz?.name || '' };
+                // Clear date if it doesn't match the new zone's active days
+                if (prev.date && sz) {
+                    const d = new Date(prev.date + 'T00:00:00');
+                    const jsDay = d.getDay();
+                    const dayNum = jsDay === 0 ? 7 : jsDay;
+                    if (!sz.active_days.includes(dayNum)) {
+                        next.date = '';
+                    }
+                }
+                return next;
+            });
         } else {
             const z = zones.find(z => z.id === val.zone_id);
             const d = z?.districts.find(d => d.id === val.district_id);
@@ -1128,12 +1179,17 @@ function OrderForm({ initial, saving, onSave, onCancel }: {
             setData(prev => ({ ...prev, zone_id: val.zone_id, district_id: val.district_id, zone: zoneText }));
         }
         if (errors.zone) setErrors(prev => { const n = { ...prev }; delete n.zone; return n; });
+        if (errors.date) setErrors(prev => { const n = { ...prev }; delete n.date; return n; });
         setTouched(prev => ({ ...prev, zone: true }));
     }
 
     function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
         const errs = validateOrder(data);
+        // Extra validation: special zone date restriction
+        if (data.date && selectedSpecialZone && !isDateAllowed(data.date)) {
+            errs.date = 'This date is not an active delivery day for this zone';
+        }
         if (Object.keys(errs).length > 0) {
             setErrors(errs);
             const t: Record<string, boolean> = {};
@@ -1141,12 +1197,18 @@ function OrderForm({ initial, saving, onSave, onCancel }: {
             setTouched(prev => ({ ...prev, ...t }));
             return;
         }
-        onSave({
+        const saveData = {
             ...data,
             pallets: Number(data.pallets),
             ctn_amount: data.ctn_amount !== undefined && String(data.ctn_amount) !== '' ? Number(data.ctn_amount) : undefined,
             ctn_to_pallet_ratio: data.ctn_to_pallet_ratio !== undefined && String(data.ctn_to_pallet_ratio) !== '' ? Number(data.ctn_to_pallet_ratio) : undefined,
-        }, pendingFile, removeAttachment);
+        };
+        // Special zones: clear zone_id/district_id so DB doesn't get an invalid FK
+        if (saveData.zone_id?.startsWith('special::')) {
+            saveData.zone_id = undefined;
+            saveData.district_id = undefined;
+        }
+        onSave(saveData, pendingFile, removeAttachment);
     }
 
     return (
@@ -1158,12 +1220,35 @@ function OrderForm({ initial, saving, onSave, onCancel }: {
                     <FormField col={ORDER_COLS.find(c => c.key === 'do_number')!} value={data.do_number} error={touched.do_number ? errors.do_number : undefined} onChange={v => set('do_number', v)} />
                     <FormField col={ORDER_COLS.find(c => c.key === 'invoice_number')!} value={data.invoice_number} error={touched.invoice_number ? errors.invoice_number : undefined} onChange={v => set('invoice_number', v)} />
                 </div>
-                <FormField col={ORDER_COLS.find(c => c.key === 'date')!} value={data.date} error={touched.date ? errors.date : undefined} onChange={v => set('date', v)} />
+                <div className="space-y-1">
+                    <label className="text-xs font-medium text-zinc-300">
+                        Delivery Date <span className="text-rose-400 ml-0.5">*</span>
+                    </label>
+                    <input
+                        type="date"
+                        value={data.date || ''}
+                        onChange={e => handleDateChange(e.target.value)}
+                        className={`w-full px-3 py-2 bg-zinc-800 border rounded-lg text-zinc-200 text-sm focus:outline-none focus:ring-1 transition-colors ${
+                            (touched.date && errors.date)
+                                ? 'border-rose-500/70 focus:border-rose-500 focus:ring-rose-500/30'
+                                : 'border-zinc-700 focus:border-emerald-500 focus:ring-emerald-500/30'
+                        }`}
+                    />
+                    {selectedSpecialZone && (
+                        <p className="text-[10px] text-amber-400/80 flex items-center gap-1">
+                            Delivery days: {selectedSpecialZone.active_days.map(d => ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][d-1]).join(', ')}
+                        </p>
+                    )}
+                    {touched.date && errors.date && (
+                        <p className="text-xs text-rose-400">{errors.date}</p>
+                    )}
+                </div>
                 <div>
                     <ZoneDistrictSelector
                         value={{ zone_id: data.zone_id, district_id: data.district_id }}
                         onChange={handleZoneSelect}
                         zones={zones}
+                        specialZones={specialZones}
                         required
                     />
                     {touched.zone && errors.zone && (
