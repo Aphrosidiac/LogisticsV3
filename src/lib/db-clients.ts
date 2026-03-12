@@ -16,7 +16,6 @@ export async function getAllClients(): Promise<Client[]> {
       company_name: row.company_name,
       contact_person: row.contact_person || undefined,
       phone: row.phone || undefined,
-      item_type: row.item_type || undefined,
       delivery_locations: row.delivery_locations || [],
       notes: row.notes || undefined,
       date: row.date || undefined,
@@ -38,7 +37,6 @@ export async function addClient(client: Partial<Client>): Promise<Client> {
       company_name: client.company_name || '',
       contact_person: client.contact_person || null,
       phone: client.phone || null,
-      item_type: client.item_type || null,
       delivery_locations: client.delivery_locations || [],
       notes: client.notes || null,
       date: client.date || null,
@@ -46,7 +44,10 @@ export async function addClient(client: Partial<Client>): Promise<Client> {
     };
 
     const { error } = await supabase.from(TABLES.CLIENTS).insert(row);
-    if (error) throw error;
+    if (error) {
+      console.error('Supabase insert error details:', JSON.stringify(error));
+      throw error;
+    }
 
     return { ...client, id, delivery_locations: row.delivery_locations } as Client;
   } catch (error) {
@@ -61,7 +62,6 @@ export async function updateClient(id: string, updates: Partial<Client>) {
     if (updates.company_name !== undefined) payload.company_name = updates.company_name;
     if (updates.contact_person !== undefined) payload.contact_person = updates.contact_person || null;
     if (updates.phone !== undefined) payload.phone = updates.phone || null;
-    if (updates.item_type !== undefined) payload.item_type = updates.item_type || null;
     if (updates.delivery_locations !== undefined) payload.delivery_locations = updates.delivery_locations;
     if (updates.notes !== undefined) payload.notes = updates.notes || null;
     if (updates.date !== undefined) payload.date = updates.date || null;

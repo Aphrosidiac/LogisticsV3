@@ -15,12 +15,9 @@ import {
     Calendar,
     ImageIcon,
     Upload,
-    Eye,
     Download,
     Phone,
     User,
-    Package,
-    FileText,
     Paperclip,
 } from 'lucide-react';
 import * as db from '@/lib/db-supabase';
@@ -61,7 +58,6 @@ export default function ClientsPage() {
             c.company_name.toLowerCase().includes(q) ||
             (c.contact_person?.toLowerCase().includes(q)) ||
             (c.phone?.toLowerCase().includes(q)) ||
-            (c.item_type?.toLowerCase().includes(q)) ||
             c.delivery_locations.some(l => l.toLowerCase().includes(q)) ||
             (c.notes?.toLowerCase().includes(q))
         );
@@ -169,11 +165,6 @@ export default function ClientsPage() {
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2">
                                             <span className="text-sm font-medium text-zinc-200 truncate">{client.company_name}</span>
-                                            {client.item_type && (
-                                                <span className="text-[10px] px-1.5 py-0.5 bg-zinc-800 text-zinc-400 border border-zinc-700 rounded shrink-0">
-                                                    {client.item_type}
-                                                </span>
-                                            )}
                                             {(client.attachment_urls || []).length > 0 && (
                                                 <Paperclip className="w-3 h-3 text-zinc-500 shrink-0" />
                                             )}
@@ -261,9 +252,6 @@ export default function ClientsPage() {
                         <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800 shrink-0">
                             <div className="min-w-0">
                                 <h3 className="text-lg font-semibold text-white truncate">{viewClient.company_name}</h3>
-                                {viewClient.item_type && (
-                                    <span className="text-xs text-zinc-500">{viewClient.item_type}</span>
-                                )}
                             </div>
                             <div className="flex items-center gap-2 shrink-0">
                                 <button
@@ -521,18 +509,6 @@ function ClientForm({ initial, saving, onSave, onCancel, onViewAttachment }: {
                         className="w-full mt-1 px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-zinc-200 text-sm focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30"
                     />
                 </div>
-            </div>
-
-            {/* Item Type */}
-            <div>
-                <label className="text-xs font-medium text-zinc-300">Item Type</label>
-                <input
-                    type="text"
-                    value={data.item_type || ''}
-                    onChange={e => set('item_type', e.target.value)}
-                    placeholder="e.g. Frozen goods, Dry goods, Electronics"
-                    className="w-full mt-1 px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-zinc-200 text-sm focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30"
-                />
             </div>
 
             {/* Delivery Locations */}

@@ -180,7 +180,6 @@ export interface Client {
   company_name: string;
   contact_person?: string;
   phone?: string;
-  item_type?: string;
   delivery_locations: string[];
   notes?: string;
   date?: string;
