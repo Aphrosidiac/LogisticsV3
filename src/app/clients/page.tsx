@@ -416,7 +416,7 @@ function ClientForm({ initial, saving, onSave, onCancel, onViewAttachment }: {
         attachment_urls: initial.attachment_urls || [],
     });
     const [error, setError] = useState('');
-    const [stagedFile, setStagedFile] = useState<File | null>(null);
+    const [stagedFiles, setStagedFiles] = useState<File[]>([]);
     const [uploading, setUploading] = useState(false);
 
     function set(key: keyof Client, value: any) {
@@ -455,17 +455,20 @@ function ClientForm({ initial, saving, onSave, onCancel, onViewAttachment }: {
         const cleanedLocations = (data.delivery_locations || []).filter(l => l.trim());
         let attachmentUrls = [...(data.attachment_urls || [])];
 
-        if (stagedFile) {
+        if (stagedFiles.length > 0) {
             setUploading(true);
             const clientId = data.id || 'temp-' + Date.now();
-            const result = await uploadClientAttachment(clientId, stagedFile);
-            setUploading(false);
-            if (result.success && result.url) {
-                attachmentUrls.push(result.url);
-            } else {
-                setError(result.error || 'Upload failed');
-                return;
+            for (const file of stagedFiles) {
+                const result = await uploadClientAttachment(clientId, file);
+                if (result.success && result.url) {
+                    attachmentUrls.push(result.url);
+                } else {
+                    setUploading(false);
+                    setError(result.error || 'Upload failed');
+                    return;
+                }
             }
+            setUploading(false);
         }
 
         onSave({ ...data, delivery_locations: cleanedLocations, attachment_urls: attachmentUrls });
@@ -583,9 +586,9 @@ function ClientForm({ initial, saving, onSave, onCancel, onViewAttachment }: {
                 />
             </div>
 
-            {/* Attachment */}
+            {/* DO Attachments */}
             <div>
-                <label className="text-xs font-medium text-zinc-300">Image Attachment</label>
+                <label className="text-xs font-medium text-zinc-300">DO Images</label>
                 {/* Existing attachments */}
                 {(data.attachment_urls || []).length > 0 && (
                     <div className="mt-2 space-y-2">
@@ -611,27 +614,33 @@ function ClientForm({ initial, saving, onSave, onCancel, onViewAttachment }: {
                         ))}
                     </div>
                 )}
-                {/* Stage new file */}
-                {stagedFile ? (
-                    <div className="mt-2 flex items-center gap-2 p-2 bg-emerald-500/5 border border-emerald-500/20 rounded-lg">
-                        <ImageIcon className="w-4 h-4 text-emerald-400 shrink-0" />
-                        <span className="text-xs text-emerald-300 truncate flex-1">{stagedFile.name}</span>
-                        <button type="button" onClick={() => setStagedFile(null)} className="p-1 text-zinc-600 hover:text-rose-400 rounded transition-colors">
-                            <X className="w-3.5 h-3.5" />
-                        </button>
+                {/* Staged files */}
+                {stagedFiles.length > 0 && (
+                    <div className="mt-2 space-y-2">
+                        {stagedFiles.map((file, i) => (
+                            <div key={i} className="flex items-center gap-2 p-2 bg-emerald-500/5 border border-emerald-500/20 rounded-lg">
+                                <ImageIcon className="w-4 h-4 text-emerald-400 shrink-0" />
+                                <span className="text-xs text-emerald-300 truncate flex-1">{file.name}</span>
+                                <button type="button" onClick={() => setStagedFiles(prev => prev.filter((_, j) => j !== i))} className="p-1 text-zinc-600 hover:text-rose-400 rounded transition-colors">
+                                    <X className="w-3.5 h-3.5" />
+                                </button>
+                            </div>
+                        ))}
                     </div>
-                ) : (
-                    <label className="mt-2 flex items-center gap-2 p-3 border border-dashed border-zinc-700 rounded-lg cursor-pointer hover:border-emerald-500/50 hover:bg-emerald-500/5 transition-colors">
-                        <Upload className="w-4 h-4 text-zinc-500" />
-                        <span className="text-xs text-zinc-500">Click to upload image (JPG, PNG, WebP — max 10MB)</span>
-                        <input
-                            type="file"
-                            accept="image/jpeg,image/png,image/webp,image/gif"
-                            className="hidden"
-                            onChange={e => { if (e.target.files?.[0]) setStagedFile(e.target.files[0]); }}
-                        />
-                    </label>
                 )}
+                {/* Add file button */}
+                <label className="mt-2 flex items-center gap-2 p-3 border border-dashed border-zinc-700 rounded-lg cursor-pointer hover:border-emerald-500/50 hover:bg-emerald-500/5 transition-colors">
+                    <Plus className="w-4 h-4 text-zinc-500" />
+                    <span className="text-xs text-zinc-500">
+                        {(data.attachment_urls || []).length > 0 || stagedFiles.length > 0 ? 'Add another file' : 'Click to upload DO file (JPG, PNG, WebP, PDF — max 10MB)'}
+                    </span>
+                    <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,image/gif,application/pdf"
+                        className="hidden"
+                        onChange={e => { if (e.target.files?.[0]) setStagedFiles(prev => [...prev, e.target.files![0]]); }}
+                    />
+                </label>
             </div>
 
             {/* Notes */}

@@ -190,7 +190,7 @@ export async function uploadClientAttachment(
   file: File
 ): Promise<FileUploadResult> {
   try {
-    const validationError = validateFile(file, true);
+    const validationError = validateFile(file, false);
     if (validationError) {
       return { success: false, error: validationError };
     }
