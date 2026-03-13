@@ -9,6 +9,12 @@ export const GET = withInternalAuth(async (request: NextRequest) => {
     try {
         // 1. Load config
         const config = await db.getConfig();
+
+        // 1a. Check if distribution is paused
+        if (config.distributionPaused) {
+            return NextResponse.json({ ran: false, reason: 'distribution paused' });
+        }
+
         const distributionTime = config.distributionTime || '20:00';
 
         // 2. Check current time against scheduled time (in MY/SG timezone)

@@ -96,6 +96,11 @@ export default function DistributionPage() {
     const handleCalculate = async () => {
         if (!hasData) return;
 
+        if (config.distributionPaused) {
+            setError('Distribution is currently paused. Go to Admin Settings to resume.');
+            return;
+        }
+
         setIsCalculating(true);
         setError(null);
 
@@ -294,7 +299,14 @@ export default function DistributionPage() {
                     </div>
                     <h1 className="text-2xl font-bold text-white tracking-tight">Route Distribution</h1>
                     <p className="text-sm text-zinc-400 mt-0.5">Assign delivery orders to drivers by date</p>
-                    {config.distributionTime && (
+                    {config.distributionPaused ? (
+                        <div className="flex items-center gap-1.5 mt-2">
+                            <AlertCircle className="w-3 h-3 text-rose-400" />
+                            <span className="text-xs text-rose-400">
+                                Distribution is paused — <Link href="/admin" className="underline hover:text-rose-300">resume in Admin Settings</Link>
+                            </span>
+                        </div>
+                    ) : config.distributionTime && (
                         <div className="flex items-center gap-1.5 mt-2">
                             <Clock className="w-3 h-3 text-emerald-400" />
                             <span className="text-xs text-emerald-400">
@@ -307,7 +319,7 @@ export default function DistributionPage() {
                 {hasData && (
                     <button
                         onClick={handleCalculate}
-                        disabled={isCalculating}
+                        disabled={isCalculating || config.distributionPaused}
                         className="btn-primary flex items-center gap-2 shrink-0"
                     >
                         {isCalculating ? (

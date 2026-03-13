@@ -173,6 +173,7 @@ export interface AppConfig {
   distributionTime?: string;           // "HH:MM" e.g. "20:00"
   lastAutoDistributionDate?: string;   // YYYY-MM-DD
   autoMessageRecipients?: 'admins' | 'drivers' | 'both'; // Who receives WhatsApp after auto-distribution
+  distributionPaused?: boolean;        // When true, auto-distribution is disabled
 }
 
 export interface Client {

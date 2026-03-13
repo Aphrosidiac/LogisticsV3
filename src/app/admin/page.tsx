@@ -21,6 +21,8 @@ import {
     MessageSquare,
     Clock,
     RefreshCw,
+    Pause,
+    Play,
 } from 'lucide-react';
 
 export default function AdminPage() {
@@ -38,6 +40,9 @@ export default function AdminPage() {
     const [autoRecipients, setAutoRecipients] = useState<'admins' | 'drivers' | 'both'>(config.autoMessageRecipients || 'drivers');
     const [isSavingSchedule, setIsSavingSchedule] = useState(false);
     const [scheduleSaved, setScheduleSaved] = useState(false);
+
+    // Distribution pause toggle
+    const [isTogglingPause, setIsTogglingPause] = useState(false);
 
     // Reset distribution timer
     const [isResetting, setIsResetting] = useState(false);
@@ -99,6 +104,23 @@ export default function AdminPage() {
             addLog('error', 'Failed to reset distribution timer', err.message);
         } finally {
             setIsResetting(false);
+        }
+    }
+
+    // ── Toggle distribution pause ───────────────────────────────────────────
+
+    async function toggleDistributionPause() {
+        setIsTogglingPause(true);
+        try {
+            const newPaused = !config.distributionPaused;
+            const updatedConfig = { ...config, distributionPaused: newPaused };
+            await db.saveConfig(updatedConfig);
+            dispatch({ type: 'SET_CONFIG', payload: updatedConfig });
+            addLog('info', newPaused ? 'Auto-distribution paused' : 'Auto-distribution resumed');
+        } catch (err: any) {
+            addLog('error', 'Failed to toggle distribution pause', err.message);
+        } finally {
+            setIsTogglingPause(false);
         }
     }
 
@@ -259,15 +281,42 @@ export default function AdminPage() {
 
             {/* ── Section 4: Distribution Schedule ── */}
             <div className="card p-6 space-y-4">
-                <div>
-                    <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-                        <Clock className="w-5 h-5 text-emerald-400" />
-                        Distribution Schedule
-                    </h2>
-                    <p className="text-sm text-zinc-500 mt-0.5">
-                        Auto-distribute pending orders to drivers daily at a set time
-                    </p>
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                            <Clock className="w-5 h-5 text-emerald-400" />
+                            Distribution Schedule
+                        </h2>
+                        <p className="text-sm text-zinc-500 mt-0.5">
+                            Auto-distribute pending orders to drivers daily at a set time
+                        </p>
+                    </div>
+                    <button
+                        onClick={toggleDistributionPause}
+                        disabled={isTogglingPause}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors disabled:opacity-50 disabled:cursor-wait ${
+                            config.distributionPaused
+                                ? 'bg-rose-500/10 text-rose-400 border-rose-500/30 hover:bg-rose-500/20'
+                                : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
+                        }`}
+                    >
+                        {isTogglingPause ? (
+                            <Loader className="w-4 h-4 animate-spin" />
+                        ) : config.distributionPaused ? (
+                            <Play className="w-4 h-4" />
+                        ) : (
+                            <Pause className="w-4 h-4" />
+                        )}
+                        {config.distributionPaused ? 'Resume' : 'Pause'}
+                    </button>
                 </div>
+
+                {config.distributionPaused && (
+                    <div className="flex items-center gap-2 bg-rose-500/10 border border-rose-500/30 rounded-lg px-3 py-2">
+                        <Pause className="w-4 h-4 text-rose-400 shrink-0" />
+                        <span className="text-sm text-rose-300">Auto-distribution is paused. Orders will not be distributed automatically until resumed.</span>
+                    </div>
+                )}
 
                 <div className="flex flex-wrap items-center gap-3">
                     <label className="text-sm text-zinc-400 shrink-0">Auto-distribute daily at:</label>
