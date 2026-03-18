@@ -125,8 +125,8 @@ export default function CompletedOrdersPage() {
       order.delivery || '',
       order.pallets.toString(),
       order.priority || 'standard',
-      formatDisplayDate(order.date),
-      formatCompletedDate(order.completed_date),
+      order.date || '',
+      order.completed_date ? order.completed_date.split('T')[0] : '',
       order.assigned_driver_id ? (driverMap[order.assigned_driver_id] || order.assigned_driver_id) : '',
     ]);
     const csvContent = [headers, ...csvData].map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');

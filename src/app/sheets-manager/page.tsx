@@ -121,12 +121,13 @@ function validateDriver(data: Partial<Driver>): Record<string, string> {
 
 // ── CSV helpers ───────────────────────────────────────────────────────────────
 
-function ordersToCSV(orders: Order[]): string {
-    const headers = ['DO Number', 'Invoice Number', 'Delivery Date', 'Zone', 'Pickup', 'Delivery', 'Pallets', 'CTN Amount', 'CTN per Pallet', 'Priority', 'Status'];
+function ordersToCSV(orders: Order[], drivers: Driver[]): string {
+    const driverMap = new Map(drivers.map(d => [d.id, d.name]));
+    const headers = ['DO Number', 'Invoice Number', 'Delivery Date', 'Zone', 'Pickup', 'Delivery', 'Pallets', 'CTN Amount', 'CTN per Pallet', 'Priority', 'Status', 'Driver'];
     const rows = orders.map(o => [
         o.do_number || '',
         o.invoice_number || '',
-        toDisplayDate(o.date),
+        o.date || '',
         o.zone || '',
         o.pickup || '',
         o.delivery || '',
@@ -135,6 +136,7 @@ function ordersToCSV(orders: Order[]): string {
         o.ctn_to_pallet_ratio ?? '',
         o.priority || 'standard',
         o.status || 'pending',
+        o.assigned_driver_id ? (driverMap.get(o.assigned_driver_id) || '') : '',
     ]);
     return [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
 }
@@ -187,6 +189,7 @@ export default function DatabaseManagerPage() {
     const [orderStatusFilter, setOrderStatusFilter] = useState('active');
     const [orderDateFrom, setOrderDateFrom] = useState('');
     const [orderDateTo, setOrderDateTo] = useState('');
+    const [orderDriverFilter, setOrderDriverFilter] = useState('');
     const [orderSort, setOrderSort] = useState<{ field: string; dir: 'asc' | 'desc' }>({ field: 'date', dir: 'asc' });
 
     // Driver filters & sort
@@ -214,6 +217,7 @@ export default function DatabaseManagerPage() {
         }
         if (orderStatusFilter === 'active') result = result.filter(o => o.status !== 'completed' && o.status !== 'cancelled');
         else if (orderStatusFilter) result = result.filter(o => o.status === orderStatusFilter);
+        if (orderDriverFilter) result = result.filter(o => o.assigned_driver_id === orderDriverFilter);
         if (orderDateFrom) result = result.filter(o => o.date >= orderDateFrom);
         if (orderDateTo) result = result.filter(o => o.date <= orderDateTo);
         result.sort((a, b) => {
@@ -229,7 +233,7 @@ export default function DatabaseManagerPage() {
             return orderSort.dir === 'asc' ? cmp : -cmp;
         });
         return result;
-    }, [orders, orderSearch, orderStatusFilter, orderDateFrom, orderDateTo, orderSort]);
+    }, [orders, orderSearch, orderStatusFilter, orderDriverFilter, orderDateFrom, orderDateTo, orderSort]);
 
     const filteredDrivers = useMemo(() => {
         let result = [...drivers];
@@ -263,11 +267,11 @@ export default function DatabaseManagerPage() {
         setDriverSort(prev => ({ field, dir: prev.field === field && prev.dir === 'asc' ? 'desc' : 'asc' }));
     }
     function clearOrderFilters() {
-        setOrderSearch(''); setOrderStatusFilter(''); setOrderDateFrom(''); setOrderDateTo('');
+        setOrderSearch(''); setOrderStatusFilter(''); setOrderDriverFilter(''); setOrderDateFrom(''); setOrderDateTo('');
     }
 
     // Reset to page 1 when filters or sort change
-    useEffect(() => { setOrderPage(1); }, [orderSearch, orderStatusFilter, orderDateFrom, orderDateTo, orderSort]);
+    useEffect(() => { setOrderPage(1); }, [orderSearch, orderStatusFilter, orderDriverFilter, orderDateFrom, orderDateTo, orderSort]);
     useEffect(() => { setDriverPage(1); }, [driverSearch, driverSort, driverStatusFilter]);
 
     // Paged slices
@@ -541,7 +545,15 @@ export default function DatabaseManagerPage() {
                         </div>
                         <div className="flex items-center gap-2">
                             <button
-                                onClick={() => downloadCSV('orders.csv', ordersToCSV(filteredOrders))}
+                                onClick={() => {
+                                    const date = new Date().toISOString().split('T')[0];
+                                    const driverName = orderDriverFilter ? drivers.find(d => d.id === orderDriverFilter)?.name?.replace(/\s+/g, '-') : '';
+                                    const parts = ['orders'];
+                                    if (driverName) parts.push(driverName);
+                                    if (orderDateFrom || orderDateTo) parts.push([orderDateFrom, orderDateTo].filter(Boolean).join('-to-'));
+                                    parts.push(date);
+                                    downloadCSV(`${parts.join('_')}.csv`, ordersToCSV(filteredOrders, drivers));
+                                }}
                                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-400 hover:text-zinc-200 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 hover:border-zinc-600 rounded-lg transition-all"
                             >
                                 <Download className="w-3.5 h-3.5" /> Export
@@ -587,6 +599,16 @@ export default function DatabaseManagerPage() {
                             <option value="assigned">Assigned</option>
                             <option value="completed">Completed</option>
                         </select>
+                        <select
+                            value={orderDriverFilter}
+                            onChange={e => setOrderDriverFilter(e.target.value)}
+                            className="px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-zinc-200 focus:outline-none focus:border-emerald-500 min-w-[130px]"
+                        >
+                            <option value="">All drivers</option>
+                            {drivers.map(d => (
+                                <option key={d.id} value={d.id}>{d.name}</option>
+                            ))}
+                        </select>
                         <input
                             type="date"
                             value={orderDateFrom}
@@ -602,7 +624,7 @@ export default function DatabaseManagerPage() {
                             className="px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-zinc-200 focus:outline-none focus:border-emerald-500"
                             title="To date"
                         />
-                        {(orderSearch || orderStatusFilter || orderDateFrom || orderDateTo) && (
+                        {(orderSearch || orderStatusFilter || orderDriverFilter || orderDateFrom || orderDateTo) && (
                             <button
                                 onClick={clearOrderFilters}
                                 className="px-2.5 py-1.5 text-xs text-zinc-400 hover:text-zinc-200 bg-zinc-700/50 rounded-lg hover:bg-zinc-700 transition-colors"
@@ -801,7 +823,7 @@ export default function DatabaseManagerPage() {
                         </div>
                         <div className="flex items-center gap-2">
                             <button
-                                onClick={() => downloadCSV('drivers.csv', driversToCSV(drivers))}
+                                onClick={() => downloadCSV(`drivers_${new Date().toISOString().split('T')[0]}.csv`, driversToCSV(drivers))}
                                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-400 hover:text-zinc-200 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 hover:border-zinc-600 rounded-lg transition-all"
                             >
                                 <Download className="w-3.5 h-3.5" /> Export
@@ -1197,11 +1219,24 @@ function OrderForm({ initial, saving, onSave, onCancel }: {
             setTouched(prev => ({ ...prev, ...t }));
             return;
         }
+        // Auto-build pickup/delivery summary text from structured fields
+        const buildLocationText = (company?: string, address?: string, postcode?: string, area?: string, state?: string, phone?: string) => {
+            const parts: string[] = [];
+            if (company) parts.push(company);
+            if (address) parts.push(address);
+            const cityLine = [area, postcode, state].filter(Boolean).join(', ');
+            if (cityLine) parts.push(cityLine);
+            if (phone) parts.push(`Tel: ${phone}`);
+            return parts.length > 0 ? parts.join(', ') : undefined;
+        };
+
         const saveData = {
             ...data,
             pallets: Number(data.pallets),
             ctn_amount: data.ctn_amount !== undefined && String(data.ctn_amount) !== '' ? Number(data.ctn_amount) : undefined,
             ctn_to_pallet_ratio: data.ctn_to_pallet_ratio !== undefined && String(data.ctn_to_pallet_ratio) !== '' ? Number(data.ctn_to_pallet_ratio) : undefined,
+            pickup: buildLocationText(data.pickup_company, data.pickup_address, data.pickup_postcode, data.pickup_area, data.pickup_state, data.pickup_phone) || data.pickup,
+            delivery: buildLocationText(data.delivery_company, data.delivery_address, data.delivery_postcode, data.delivery_area, data.delivery_state, data.delivery_phone) || data.delivery,
         };
         // Special zones: clear zone_id/district_id so DB doesn't get an invalid FK
         if (saveData.zone_id?.startsWith('special::')) {
@@ -1257,16 +1292,109 @@ function OrderForm({ initial, saving, onSave, onCancel }: {
                 </div>
             </fieldset>
 
-            {/* Group 2: Route */}
-            <fieldset className="space-y-3">
-                <legend className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">Route</legend>
-                <div className="grid grid-cols-2 gap-3">
-                    <FormField col={ORDER_COLS.find(c => c.key === 'pickup')!} value={data.pickup} error={touched.pickup ? errors.pickup : undefined} onChange={v => set('pickup', v)} />
-                    <FormField col={ORDER_COLS.find(c => c.key === 'delivery')!} value={data.delivery} error={touched.delivery ? errors.delivery : undefined} onChange={v => set('delivery', v)} />
+            {/* Group 2: Pickup Details */}
+            <fieldset className="space-y-3 border-l-2 border-blue-500/50 pl-4">
+                <legend className="text-xs font-semibold text-blue-400 uppercase tracking-wide flex items-center gap-1.5">
+                    <Upload className="w-3.5 h-3.5" /> Pickup Details
+                </legend>
+                <div className="space-y-1">
+                    <label className="text-xs font-medium text-zinc-300">Company Name</label>
+                    <input type="text" value={data.pickup_company || ''} onChange={e => set('pickup_company', e.target.value)} placeholder="e.g. Color Pigment (M) Sdn Bhd" className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-zinc-200 text-sm focus:outline-none focus:ring-1 focus:border-emerald-500 focus:ring-emerald-500/30 transition-colors" />
+                </div>
+                <div className="space-y-1">
+                    <label className="text-xs font-medium text-zinc-300">Address</label>
+                    <input type="text" value={data.pickup_address || ''} onChange={e => set('pickup_address', e.target.value)} placeholder="e.g. PT360, Jalan TPP 5/1, Taman Perindustrian Puchong" className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-zinc-200 text-sm focus:outline-none focus:ring-1 focus:border-emerald-500 focus:ring-emerald-500/30 transition-colors" />
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                    <div className="space-y-1">
+                        <label className="text-xs font-medium text-zinc-300">Postcode</label>
+                        <input type="text" value={data.pickup_postcode || ''} onChange={e => set('pickup_postcode', e.target.value)} placeholder="e.g. 47100" maxLength={5} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-zinc-200 text-sm focus:outline-none focus:ring-1 focus:border-emerald-500 focus:ring-emerald-500/30 transition-colors" />
+                    </div>
+                    <div className="space-y-1">
+                        <label className="text-xs font-medium text-zinc-300">Area / City</label>
+                        <input type="text" value={data.pickup_area || ''} onChange={e => set('pickup_area', e.target.value)} placeholder="e.g. Puchong" className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-zinc-200 text-sm focus:outline-none focus:ring-1 focus:border-emerald-500 focus:ring-emerald-500/30 transition-colors" />
+                    </div>
+                    <div className="space-y-1">
+                        <label className="text-xs font-medium text-zinc-300">Negeri</label>
+                        <select value={data.pickup_state || ''} onChange={e => set('pickup_state', e.target.value)} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-zinc-200 text-sm focus:outline-none focus:ring-1 focus:border-emerald-500 focus:ring-emerald-500/30 transition-colors">
+                            <option value="">— Select —</option>
+                            <option value="Johor">Johor</option>
+                            <option value="Kedah">Kedah</option>
+                            <option value="Kelantan">Kelantan</option>
+                            <option value="Melaka">Melaka</option>
+                            <option value="Negeri Sembilan">Negeri Sembilan</option>
+                            <option value="Pahang">Pahang</option>
+                            <option value="Perak">Perak</option>
+                            <option value="Perlis">Perlis</option>
+                            <option value="Pulau Pinang">Pulau Pinang</option>
+                            <option value="Sabah">Sabah</option>
+                            <option value="Sarawak">Sarawak</option>
+                            <option value="Selangor">Selangor</option>
+                            <option value="Terengganu">Terengganu</option>
+                            <option value="W.P. Kuala Lumpur">W.P. Kuala Lumpur</option>
+                            <option value="W.P. Labuan">W.P. Labuan</option>
+                            <option value="W.P. Putrajaya">W.P. Putrajaya</option>
+                        </select>
+                    </div>
+                </div>
+                <div className="space-y-1">
+                    <label className="text-xs font-medium text-zinc-300">Contact No.</label>
+                    <input type="tel" value={data.pickup_phone || ''} onChange={e => set('pickup_phone', e.target.value)} placeholder="e.g. 012-3305629" className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-zinc-200 text-sm focus:outline-none focus:ring-1 focus:border-emerald-500 focus:ring-emerald-500/30 transition-colors" />
                 </div>
             </fieldset>
 
-            {/* Group 3: Quantities */}
+            {/* Group 3: Delivery Details */}
+            <fieldset className="space-y-3 border-l-2 border-emerald-500/50 pl-4">
+                <legend className="text-xs font-semibold text-emerald-400 uppercase tracking-wide flex items-center gap-1.5">
+                    <Download className="w-3.5 h-3.5" /> Delivery Details
+                </legend>
+                <div className="space-y-1">
+                    <label className="text-xs font-medium text-zinc-300">Company Name</label>
+                    <input type="text" value={data.delivery_company || ''} onChange={e => set('delivery_company', e.target.value)} placeholder="e.g. YFM Industrial Sdn Bhd" className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-zinc-200 text-sm focus:outline-none focus:ring-1 focus:border-emerald-500 focus:ring-emerald-500/30 transition-colors" />
+                </div>
+                <div className="space-y-1">
+                    <label className="text-xs font-medium text-zinc-300">Address</label>
+                    <input type="text" value={data.delivery_address || ''} onChange={e => set('delivery_address', e.target.value)} placeholder="e.g. 10, Jalan Hasil 2, Kawasan Perindustrian Hasil" className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-zinc-200 text-sm focus:outline-none focus:ring-1 focus:border-emerald-500 focus:ring-emerald-500/30 transition-colors" />
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                    <div className="space-y-1">
+                        <label className="text-xs font-medium text-zinc-300">Postcode</label>
+                        <input type="text" value={data.delivery_postcode || ''} onChange={e => set('delivery_postcode', e.target.value)} placeholder="e.g. 81200" maxLength={5} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-zinc-200 text-sm focus:outline-none focus:ring-1 focus:border-emerald-500 focus:ring-emerald-500/30 transition-colors" />
+                    </div>
+                    <div className="space-y-1">
+                        <label className="text-xs font-medium text-zinc-300">Area / City</label>
+                        <input type="text" value={data.delivery_area || ''} onChange={e => set('delivery_area', e.target.value)} placeholder="e.g. Johor Bahru" className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-zinc-200 text-sm focus:outline-none focus:ring-1 focus:border-emerald-500 focus:ring-emerald-500/30 transition-colors" />
+                    </div>
+                    <div className="space-y-1">
+                        <label className="text-xs font-medium text-zinc-300">Negeri</label>
+                        <select value={data.delivery_state || ''} onChange={e => set('delivery_state', e.target.value)} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-zinc-200 text-sm focus:outline-none focus:ring-1 focus:border-emerald-500 focus:ring-emerald-500/30 transition-colors">
+                            <option value="">— Select —</option>
+                            <option value="Johor">Johor</option>
+                            <option value="Kedah">Kedah</option>
+                            <option value="Kelantan">Kelantan</option>
+                            <option value="Melaka">Melaka</option>
+                            <option value="Negeri Sembilan">Negeri Sembilan</option>
+                            <option value="Pahang">Pahang</option>
+                            <option value="Perak">Perak</option>
+                            <option value="Perlis">Perlis</option>
+                            <option value="Pulau Pinang">Pulau Pinang</option>
+                            <option value="Sabah">Sabah</option>
+                            <option value="Sarawak">Sarawak</option>
+                            <option value="Selangor">Selangor</option>
+                            <option value="Terengganu">Terengganu</option>
+                            <option value="W.P. Kuala Lumpur">W.P. Kuala Lumpur</option>
+                            <option value="W.P. Labuan">W.P. Labuan</option>
+                            <option value="W.P. Putrajaya">W.P. Putrajaya</option>
+                        </select>
+                    </div>
+                </div>
+                <div className="space-y-1">
+                    <label className="text-xs font-medium text-zinc-300">Contact No.</label>
+                    <input type="tel" value={data.delivery_phone || ''} onChange={e => set('delivery_phone', e.target.value)} placeholder="e.g. 016-2015629" className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-zinc-200 text-sm focus:outline-none focus:ring-1 focus:border-emerald-500 focus:ring-emerald-500/30 transition-colors" />
+                </div>
+            </fieldset>
+
+            {/* Group 4: Quantities */}
             <fieldset className="space-y-3">
                 <legend className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">Quantities</legend>
                 <div className="grid grid-cols-3 gap-3">
@@ -1276,7 +1404,7 @@ function OrderForm({ initial, saving, onSave, onCancel }: {
                 </div>
             </fieldset>
 
-            {/* Group 4: Classification */}
+            {/* Group 5: Classification */}
             <fieldset className="space-y-3">
                 <legend className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">Classification</legend>
                 <div className="grid grid-cols-2 gap-3">
@@ -1285,7 +1413,7 @@ function OrderForm({ initial, saving, onSave, onCancel }: {
                 </div>
             </fieldset>
 
-            {/* Group 5: DO Document */}
+            {/* Group 6: DO Document */}
             <fieldset className="space-y-2">
                 <legend className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">DO Document</legend>
                 {pendingFile ? (

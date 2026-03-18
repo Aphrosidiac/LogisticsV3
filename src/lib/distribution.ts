@@ -159,14 +159,16 @@ export function calculateDistribution(
     calculatedPallets: calculateTotalPallets(order),
   }));
 
-  // Sort by priority (high first), then by pallets (largest first)
+  // Sort by priority (high first), then FIFO (earliest created first)
   ordersWithPallets.sort((a, b) => {
     // Priority: high > standard
     if (a.priority === 'high' && b.priority !== 'high') return -1;
     if (a.priority !== 'high' && b.priority === 'high') return 1;
 
-    // Then by pallets descending
-    return b.calculatedPallets - a.calculatedPallets;
+    // Then by created_at ascending (FIFO — first in, first out)
+    const aTime = a.created_at || '';
+    const bTime = b.created_at || '';
+    return aTime < bTime ? -1 : aTime > bTime ? 1 : 0;
   });
 
   // Initialize driver states

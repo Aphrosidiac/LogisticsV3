@@ -39,7 +39,19 @@ export async function saveOrders(orders: Order[], sheetId?: string) {
         do_number: order.do_number,
         invoice_number: order.invoice_number || order.invoice,
         pickup: order.pickup,
+        pickup_company: order.pickup_company || null,
+        pickup_address: order.pickup_address || null,
+        pickup_postcode: order.pickup_postcode || null,
+        pickup_area: order.pickup_area || null,
+        pickup_state: order.pickup_state || null,
+        pickup_phone: order.pickup_phone || null,
         delivery: order.delivery,
+        delivery_company: order.delivery_company || null,
+        delivery_address: order.delivery_address || null,
+        delivery_postcode: order.delivery_postcode || null,
+        delivery_area: order.delivery_area || null,
+        delivery_state: order.delivery_state || null,
+        delivery_phone: order.delivery_phone || null,
         attachment_urls: order.attachment_urls || [],
         raw_data: order.rawData || {},
       };
@@ -80,9 +92,22 @@ export async function getAllOrders(): Promise<Order[]> {
       invoice_number: row.invoice_number,
       invoice: row.invoice_number,
       pickup: row.pickup,
+      pickup_company: row.pickup_company || undefined,
+      pickup_address: row.pickup_address || undefined,
+      pickup_postcode: row.pickup_postcode || undefined,
+      pickup_area: row.pickup_area || undefined,
+      pickup_state: row.pickup_state || undefined,
+      pickup_phone: row.pickup_phone || undefined,
       delivery: row.delivery,
+      delivery_company: row.delivery_company || undefined,
+      delivery_address: row.delivery_address || undefined,
+      delivery_postcode: row.delivery_postcode || undefined,
+      delivery_area: row.delivery_area || undefined,
+      delivery_state: row.delivery_state || undefined,
+      delivery_phone: row.delivery_phone || undefined,
       attachment_urls: row.attachment_urls || [],
       assigned_driver_id: row.assigned_driver_id || undefined,
+      created_at: row.created_at || undefined,
       rawData: row.raw_data || {},
     }));
   } catch (error) {
@@ -121,7 +146,19 @@ export async function addOrder(order: Partial<Order>): Promise<Order> {
       do_number: order.do_number || null,
       invoice_number: order.invoice_number || null,
       pickup: order.pickup || null,
+      pickup_company: order.pickup_company || null,
+      pickup_address: order.pickup_address || null,
+      pickup_postcode: order.pickup_postcode || null,
+      pickup_area: order.pickup_area || null,
+      pickup_state: order.pickup_state || null,
+      pickup_phone: order.pickup_phone || null,
       delivery: order.delivery || null,
+      delivery_company: order.delivery_company || null,
+      delivery_address: order.delivery_address || null,
+      delivery_postcode: order.delivery_postcode || null,
+      delivery_area: order.delivery_area || null,
+      delivery_state: order.delivery_state || null,
+      delivery_phone: order.delivery_phone || null,
       attachment_urls: [],
       raw_data: {},
     };
@@ -149,7 +186,19 @@ export async function updateOrder(id: string, updates: Partial<Order>) {
     if (updates.do_number !== undefined) payload.do_number = updates.do_number || null;
     if (updates.invoice_number !== undefined) payload.invoice_number = updates.invoice_number || null;
     if (updates.pickup !== undefined) payload.pickup = updates.pickup || null;
+    if (updates.pickup_company !== undefined) payload.pickup_company = updates.pickup_company || null;
+    if (updates.pickup_address !== undefined) payload.pickup_address = updates.pickup_address || null;
+    if (updates.pickup_postcode !== undefined) payload.pickup_postcode = updates.pickup_postcode || null;
+    if (updates.pickup_area !== undefined) payload.pickup_area = updates.pickup_area || null;
+    if (updates.pickup_state !== undefined) payload.pickup_state = updates.pickup_state || null;
+    if (updates.pickup_phone !== undefined) payload.pickup_phone = updates.pickup_phone || null;
     if (updates.delivery !== undefined) payload.delivery = updates.delivery || null;
+    if (updates.delivery_company !== undefined) payload.delivery_company = updates.delivery_company || null;
+    if (updates.delivery_address !== undefined) payload.delivery_address = updates.delivery_address || null;
+    if (updates.delivery_postcode !== undefined) payload.delivery_postcode = updates.delivery_postcode || null;
+    if (updates.delivery_area !== undefined) payload.delivery_area = updates.delivery_area || null;
+    if (updates.delivery_state !== undefined) payload.delivery_state = updates.delivery_state || null;
+    if (updates.delivery_phone !== undefined) payload.delivery_phone = updates.delivery_phone || null;
     if (updates.zone_id !== undefined) payload.zone_id = updates.zone_id || null;
     if (updates.district_id !== undefined) payload.district_id = updates.district_id || null;
     if (updates.attachment_urls !== undefined) payload.attachment_urls = updates.attachment_urls;

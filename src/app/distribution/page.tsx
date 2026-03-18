@@ -503,6 +503,60 @@ export default function DistributionPage() {
                         </div>
                     )}
 
+                    {/* Zone Summary */}
+                    {(() => {
+                        const zoneSummary = new Map<string, { orders: number; pallets: number }>();
+                        for (const a of distribution.assignments || []) {
+                            for (const order of a.orders) {
+                                const zone = order.zone || 'Unknown';
+                                const existing = zoneSummary.get(zone) || { orders: 0, pallets: 0 };
+                                existing.orders += 1;
+                                existing.pallets += order.pallets || 0;
+                                if (order.ctn_amount && order.ctn_to_pallet_ratio && order.ctn_to_pallet_ratio > 0) {
+                                    existing.pallets += Math.ceil(order.ctn_amount / order.ctn_to_pallet_ratio);
+                                }
+                                zoneSummary.set(zone, existing);
+                            }
+                        }
+                        // Also include skipped orders
+                        for (const order of distribution.skippedOrders || []) {
+                            const zone = order.zone || 'Unknown';
+                            const existing = zoneSummary.get(zone) || { orders: 0, pallets: 0 };
+                            existing.orders += 1;
+                            existing.pallets += order.pallets || 0;
+                            if (order.ctn_amount && order.ctn_to_pallet_ratio && order.ctn_to_pallet_ratio > 0) {
+                                existing.pallets += Math.ceil(order.ctn_amount / order.ctn_to_pallet_ratio);
+                            }
+                            zoneSummary.set(zone, existing);
+                        }
+                        const sorted = Array.from(zoneSummary.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+                        if (sorted.length === 0) return null;
+                        return (
+                            <div className="card">
+                                <div className="px-4 py-3 border-b border-zinc-800 flex items-center gap-2">
+                                    <MapPin className="w-4 h-4 text-orange-400" />
+                                    <h2 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider">Zone Summary</h2>
+                                    <span className="text-xs px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400 tabular-nums">{sorted.length}</span>
+                                </div>
+                                <div className="flex flex-wrap gap-2 p-4">
+                                    {sorted.map(([zone, stats]) => (
+                                        <div key={zone} className="px-4 py-2.5 bg-zinc-800 border border-zinc-700/50 rounded-lg">
+                                            <p className="text-sm font-semibold text-white">{zone}</p>
+                                            <div className="flex items-center gap-3 mt-1">
+                                                <span className="text-xs text-zinc-400">
+                                                    <span className="text-emerald-400 font-medium">{stats.orders}</span> order{stats.orders !== 1 ? 's' : ''}
+                                                </span>
+                                                <span className="text-xs text-zinc-400">
+                                                    <span className="text-purple-400 font-medium">{stats.pallets}</span> pallet{stats.pallets !== 1 ? 's' : ''}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        );
+                    })()}
+
                     {/* Driver assignments */}
                     <div>
                         <div className="flex items-center justify-between mb-3">

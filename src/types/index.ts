@@ -48,13 +48,26 @@ export interface Order {
   do_number?: string;
   invoice_number?: string;
   pickup?: string;
+  pickup_company?: string;
+  pickup_address?: string;
+  pickup_postcode?: string;
+  pickup_area?: string;
+  pickup_state?: string;
+  pickup_phone?: string;
   delivery?: string;
+  delivery_company?: string;
+  delivery_address?: string;
+  delivery_postcode?: string;
+  delivery_area?: string;
+  delivery_state?: string;
+  delivery_phone?: string;
   invoice?: string;
   attachment_urls?: string[];
   status?: 'pending' | 'assigned' | 'in_progress' | 'completed' | 'cancelled';
   completed_date?: string;
   assigned_driver_id?: string;
   assigned_date?: string;
+  created_at?: string;
   rawData: Record<string, string>;
 }
 
