@@ -33,7 +33,7 @@ export default async function RootLayout({
             ) : (
               <div className="flex min-h-screen">
                 <Sidebar />
-                <main className="flex-1 ml-64">
+                <main className="flex-1 min-w-0">
                   <div className="flex justify-end px-8 pt-4">
                     <ThemeToggle />
                   </div>

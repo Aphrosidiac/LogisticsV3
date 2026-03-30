@@ -1128,15 +1128,43 @@ function OrderForm({ initial, saving, onSave, onCancel }: {
     const zones = cache.zones || [];
     const specialZones = cache.specialZones || [];
 
-    // On edit: if zone_id is null but zone text matches a special zone, restore the special:: prefix
+    // On edit: resolve missing structured fields from legacy text data
     const resolvedInitial = (() => {
-        if (initial.zone && !initial.zone_id) {
-            const match = specialZones.find(sz => sz.name === initial.zone);
-            if (match) {
-                return { ...initial, zone_id: `special::${match.id}` };
+        const resolved = { ...initial };
+
+        // Zone: if zone_id is missing but zone text exists, resolve IDs from text
+        if (resolved.zone && !resolved.zone_id) {
+            // Check special zones first
+            const szMatch = specialZones.find(sz => sz.name === resolved.zone);
+            if (szMatch) {
+                resolved.zone_id = `special::${szMatch.id}`;
+            } else {
+                // Check regular zones: zone text is "ZoneName - DistrictName"
+                const parts = resolved.zone.split(' - ');
+                if (parts.length >= 2) {
+                    const zoneName = parts[0].trim();
+                    const districtName = parts.slice(1).join(' - ').trim();
+                    const zone = zones.find(z => z.name === zoneName);
+                    const district = zone?.districts.find(d => d.name === districtName);
+                    if (zone && district) {
+                        resolved.zone_id = zone.id;
+                        resolved.district_id = district.id;
+                    }
+                }
             }
         }
-        return initial;
+
+        // Pickup: if structured fields are empty but summary text exists, pre-fill company
+        if (resolved.pickup && !resolved.pickup_company && !resolved.pickup_address) {
+            resolved.pickup_company = resolved.pickup;
+        }
+
+        // Delivery: same treatment
+        if (resolved.delivery && !resolved.delivery_company && !resolved.delivery_address) {
+            resolved.delivery_company = resolved.delivery;
+        }
+
+        return resolved;
     })();
 
     const [data, setData] = useState<Partial<Order>>(resolvedInitial);
