@@ -69,8 +69,50 @@ export const GET = withInternalAuth(async (request: NextRequest) => {
             });
         }
 
-        // 7. Save distribution
-        const distributionId = await db.saveDistribution(result);
+        // 7. Check for existing distribution for this date and merge if needed
+        const existing = await db.getDistributionByDate(tomorrow);
+        let distributionId: string;
+        let finalResult = result;
+
+        if (existing?.id) {
+            // Merge new assignments into existing distribution
+            const mergedAssignments = [...existing.assignments];
+            for (const newAssignment of result.assignments) {
+                const existingIdx = mergedAssignments.findIndex(a => a.driver.id === newAssignment.driver.id);
+                if (existingIdx >= 0) {
+                    const ea = mergedAssignments[existingIdx];
+                    ea.orders = [...ea.orders, ...newAssignment.orders];
+                    ea.totalOrders = ea.orders.length;
+                    ea.totalPallets += newAssignment.totalPallets;
+                    for (const z of newAssignment.zones) {
+                        if (!ea.zones.includes(z)) ea.zones.push(z);
+                    }
+                } else {
+                    mergedAssignments.push(newAssignment);
+                }
+            }
+            const allZones = new Set<string>();
+            let totalOrders = 0, totalPallets = 0;
+            for (const a of mergedAssignments) {
+                totalOrders += a.totalOrders;
+                totalPallets += a.totalPallets;
+                a.zones.forEach(z => allZones.add(z));
+            }
+            const assignedDriverIds = new Set(mergedAssignments.map(a => a.driver.id));
+            const unassignedDrivers = activeDrivers.filter(d => !assignedDriverIds.has(d.id));
+            finalResult = {
+                assignments: mergedAssignments.sort((a, b) => a.driver.name.localeCompare(b.driver.name)),
+                unassignedDrivers,
+                skippedOrders: result.skippedOrders,
+                summary: { totalOrders, totalPallets, totalZones: allZones.size, assignedDrivers: mergedAssignments.length, skippedOrders: result.skippedOrders?.length || 0 },
+                timestamp: new Date().toISOString(),
+                targetDate: tomorrow,
+            };
+            await db.updateDistribution(existing.id, finalResult);
+            distributionId = existing.id;
+        } else {
+            distributionId = await db.saveDistribution(result);
+        }
 
         // 8. Mark assigned orders as 'assigned' with driver ID
         const orderDriverMap = result.assignments.flatMap(a =>
@@ -127,7 +169,7 @@ export const GET = withInternalAuth(async (request: NextRequest) => {
             if (recipients === 'admins' || recipients === 'both') {
                 const adminNumbers = config.adminNumbers || [];
                 if (adminNumbers.length > 0) {
-                    const adminMessage = formatDistributionMessage(result);
+                    const adminMessage = formatDistributionMessage(finalResult);
                     for (const phone of adminNumbers) {
                         try {
                             const res = await sendWhatsAppMessage(phone, adminMessage);
@@ -167,7 +209,7 @@ export const GET = withInternalAuth(async (request: NextRequest) => {
         return NextResponse.json({
             ran: true,
             targetDate: tomorrow,
-            summary: result.summary,
+            summary: finalResult.summary,
             recipients,
             whatsapp: waResults,
         });

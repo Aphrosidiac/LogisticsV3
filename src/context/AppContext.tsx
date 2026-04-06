@@ -20,7 +20,7 @@ type AppAction =
     | { type: 'SET_ORDERS'; payload: Order[] }
     | { type: 'SET_DRIVERS'; payload: Driver[] }
     | { type: 'SET_ZONES'; payload: ZoneWithDistricts[] }
-    | { type: 'SET_DISTRIBUTION'; payload: DistributionResult }
+    | { type: 'SET_DISTRIBUTION'; payload: DistributionResult | null }
     | { type: 'SET_ADMIN_NUMBERS'; payload: string[] }
     | { type: 'SET_LOADING'; payload: boolean }
     | { type: 'CLEAR_LOGS' };

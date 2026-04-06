@@ -59,14 +59,24 @@ export default function DistributionPage() {
     }, []);
 
     useEffect(() => {
-        if (distribution?.targetDate && distribution.targetDate >= getTomorrowDate()) {
-            setTargetDate(distribution.targetDate);
-        }
-    }, [distribution?.targetDate]);
-
-    useEffect(() => {
         loadPendingCount();
+        // Load existing distribution for the selected date
+        loadDistributionForDate(targetDate);
     }, [targetDate]);
+
+    async function loadDistributionForDate(date: string) {
+        try {
+            const dist = await db.getDistributionByDate(date);
+            if (dist) {
+                dispatch({ type: 'SET_DISTRIBUTION', payload: dist });
+            } else if (distribution?.targetDate !== date) {
+                // No distribution for this date — clear the view
+                dispatch({ type: 'SET_DISTRIBUTION', payload: null });
+            }
+        } catch {
+            // non-critical
+        }
+    }
 
     async function loadDriverPhones() {
         try {
@@ -110,8 +120,76 @@ export default function DistributionPage() {
             const pendingOrders = cache.orders.filter(o => !o.status || o.status === 'pending');
             const activeDrivers = cache.drivers.filter(d => d.is_active !== false);
             const result = calculateDistribution(pendingOrders, activeDrivers, targetDate);
-            const distributionId = await db.saveDistribution(result);
 
+            // Check if there's an existing distribution for this date — merge if so
+            const existing = await db.getDistributionByDate(targetDate);
+            let finalResult: typeof result & { id?: string };
+            let distributionId: string;
+
+            if (existing?.id) {
+                // Merge new assignments into existing distribution
+                const mergedAssignments = [...existing.assignments];
+
+                for (const newAssignment of result.assignments) {
+                    const existingIdx = mergedAssignments.findIndex(
+                        a => a.driver.id === newAssignment.driver.id
+                    );
+
+                    if (existingIdx >= 0) {
+                        // Same driver — append new orders, merge zones, update totals
+                        const ea = mergedAssignments[existingIdx];
+                        ea.orders = [...ea.orders, ...newAssignment.orders];
+                        ea.totalOrders = ea.orders.length;
+                        ea.totalPallets += newAssignment.totalPallets;
+                        for (const z of newAssignment.zones) {
+                            if (!ea.zones.includes(z)) ea.zones.push(z);
+                        }
+                    } else {
+                        // New driver entry
+                        mergedAssignments.push(newAssignment);
+                    }
+                }
+
+                // Recalculate summary from merged data
+                const allZones = new Set<string>();
+                let totalOrders = 0;
+                let totalPallets = 0;
+                for (const a of mergedAssignments) {
+                    totalOrders += a.totalOrders;
+                    totalPallets += a.totalPallets;
+                    a.zones.forEach(z => allZones.add(z));
+                }
+
+                // Unassigned = drivers not in any assignment
+                const assignedDriverIds = new Set(mergedAssignments.map(a => a.driver.id));
+                const unassignedDrivers = activeDrivers.filter(d => !assignedDriverIds.has(d.id));
+
+                finalResult = {
+                    id: existing.id,
+                    assignments: mergedAssignments.sort((a, b) => a.driver.name.localeCompare(b.driver.name)),
+                    unassignedDrivers,
+                    skippedOrders: result.skippedOrders,
+                    summary: {
+                        totalOrders,
+                        totalPallets,
+                        totalZones: allZones.size,
+                        assignedDrivers: mergedAssignments.length,
+                        skippedOrders: result.skippedOrders?.length || 0,
+                    },
+                    timestamp: new Date().toISOString(),
+                    targetDate,
+                };
+
+                await db.updateDistribution(existing.id, finalResult);
+                distributionId = existing.id;
+                addLog('info', `Merged with existing distribution for ${targetDate}`);
+            } else {
+                // First distribution for this date
+                distributionId = await db.saveDistribution(result);
+                finalResult = { ...result, id: distributionId };
+            }
+
+            // Mark newly assigned orders
             const orderDriverMap = result.assignments.flatMap(a =>
                 a.orders.map(o => ({ orderId: o.id, driverId: a.driver.id }))
             );
@@ -121,12 +199,12 @@ export default function DistributionPage() {
                 dispatch({ type: 'SET_ORDERS', payload: updatedOrders });
             }
 
-            dispatch({ type: 'SET_DISTRIBUTION', payload: { ...result, id: distributionId } });
+            dispatch({ type: 'SET_DISTRIBUTION', payload: finalResult });
             await loadPendingCount();
 
             addLog(
                 'success',
-                `Distribution calculated: ${result.summary.assignedDrivers} drivers assigned to ${result.summary.totalZones} zones`
+                `Distribution calculated: ${finalResult.summary.assignedDrivers} drivers assigned to ${finalResult.summary.totalZones} zones (${finalResult.summary.totalOrders} total orders)`
             );
 
             if (result.summary.skippedOrders && result.summary.skippedOrders > 0) {

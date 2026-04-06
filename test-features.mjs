@@ -31,8 +31,8 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const BASE = 'http://localhost:3000';
 const COOKIE_JAR = '/tmp/logistics-test-cookies.txt';
 
-const VALID_USER = 'shudalogistics';
-const VALID_PASS = 'abc123';
+const VALID_USER = process.env.ADMIN_USERNAME || 'shudalogistics';
+const VALID_PASS = process.env.ADMIN_PASSWORD || 'abc123';
 
 // Parse --phone arg
 const phoneArg = process.argv.find((a) => a.startsWith('--phone'));
@@ -333,7 +333,6 @@ async function testClients() {
     company_name: '__TEST_CLIENT__',
     contact_person: 'Test Person',
     phone: '60100000000',
-    item_type: 'Frozen goods',
     delivery_locations: ['Warehouse A', 'Port Klang'],
     notes: 'Test client notes',
   });
@@ -473,6 +472,111 @@ async function testDistribution() {
   await supabase.from('drivers').delete().in('id', [driver1Id, driver2Id]);
   await supabase.from('distributions').delete().eq('id', distId);
   pass('Distribution cleanup complete');
+}
+
+// ── 6b. Distribution Merge (same date) ─────────────────────────────────────
+
+async function testDistributionMerge() {
+  section('6b. Distribution Merge (same date)');
+
+  const d1Id = randomUUID();
+  const d2Id = randomUUID();
+  const o1Id = randomUUID();
+  const o2Id = randomUUID();
+  const o3Id = randomUUID();
+
+  // Insert 2 drivers
+  await supabase.from('drivers').insert([
+    { id: d1Id, name: '__MERGE_D1__', identifier: 'MD1', max_capacity: 11, is_active: true, raw_data: {} },
+    { id: d2Id, name: '__MERGE_D2__', identifier: 'MD2', max_capacity: 11, is_active: true, raw_data: {} },
+  ]);
+
+  // Insert 3 orders for same date
+  await supabase.from('orders').insert([
+    { id: o1Id, zone: 'Zone X', date: TOMORROW, pallets: 3, status: 'pending', raw_data: {} },
+    { id: o2Id, zone: 'Zone X', date: TOMORROW, pallets: 4, status: 'pending', raw_data: {} },
+    { id: o3Id, zone: 'Zone Y', date: TOMORROW, pallets: 2, status: 'pending', raw_data: {} },
+  ]);
+
+  // Simulate first distribution: assign o1 to d1
+  const dist1Id = randomUUID();
+  const { error: s1Err } = await supabase.from('distributions').insert({
+    id: dist1Id,
+    assignments: [
+      {
+        driver: { id: d1Id, name: '__MERGE_D1__', identifier: 'MD1', max_capacity: 11 },
+        orders: [{ id: o1Id, zone: 'Zone X', date: TOMORROW, pallets: 3 }],
+        zones: ['Zone X'],
+        totalPallets: 3,
+        totalOrders: 1,
+      },
+    ],
+    summary: { totalOrders: 1, totalPallets: 3, totalZones: 1, assignedDrivers: 1, skippedOrdersList: [] },
+    target_date: TOMORROW,
+  });
+  assert(!s1Err, 'Save first distribution for date', s1Err?.message);
+
+  // Verify getDistributionByDate finds it
+  const { data: found } = await supabase
+    .from('distributions')
+    .select('*')
+    .eq('target_date', TOMORROW)
+    .order('timestamp', { ascending: false })
+    .limit(1)
+    .single();
+  assert(found?.id === dist1Id, 'getDistributionByDate finds existing', `got id: ${found?.id}`);
+
+  // Simulate merge: add o2 to d1 (existing driver) and o3 to d2 (new driver)
+  const mergedAssignments = [
+    {
+      driver: { id: d1Id, name: '__MERGE_D1__', identifier: 'MD1', max_capacity: 11 },
+      orders: [
+        { id: o1Id, zone: 'Zone X', date: TOMORROW, pallets: 3 },
+        { id: o2Id, zone: 'Zone X', date: TOMORROW, pallets: 4 },
+      ],
+      zones: ['Zone X'],
+      totalPallets: 7,
+      totalOrders: 2,
+    },
+    {
+      driver: { id: d2Id, name: '__MERGE_D2__', identifier: 'MD2', max_capacity: 11 },
+      orders: [{ id: o3Id, zone: 'Zone Y', date: TOMORROW, pallets: 2 }],
+      zones: ['Zone Y'],
+      totalPallets: 2,
+      totalOrders: 1,
+    },
+  ];
+
+  const { error: upErr } = await supabase
+    .from('distributions')
+    .update({
+      assignments: mergedAssignments,
+      summary: { totalOrders: 3, totalPallets: 9, totalZones: 2, assignedDrivers: 2, skippedOrdersList: [] },
+      timestamp: new Date().toISOString(),
+    })
+    .eq('id', dist1Id);
+  assert(!upErr, 'Update distribution with merged assignments', upErr?.message);
+
+  // Verify merged result
+  const { data: merged } = await supabase
+    .from('distributions')
+    .select('*')
+    .eq('id', dist1Id)
+    .single();
+  assert(merged?.assignments?.length === 2, 'Merged distribution has 2 driver entries', `got ${merged?.assignments?.length}`);
+  assert(merged?.summary?.totalOrders === 3, 'Merged summary shows 3 total orders', `got ${merged?.summary?.totalOrders}`);
+  assert(merged?.summary?.totalPallets === 9, 'Merged summary shows 9 total pallets', `got ${merged?.summary?.totalPallets}`);
+
+  // Verify d1 has both orders
+  const d1Assignment = merged?.assignments?.find(a => a.driver.id === d1Id);
+  assert(d1Assignment?.orders?.length === 2, 'Driver 1 has 2 orders after merge', `got ${d1Assignment?.orders?.length}`);
+  assert(d1Assignment?.totalPallets === 7, 'Driver 1 has 7 pallets after merge', `got ${d1Assignment?.totalPallets}`);
+
+  // Cleanup
+  await supabase.from('distributions').delete().eq('id', dist1Id);
+  await supabase.from('orders').delete().in('id', [o1Id, o2Id, o3Id]);
+  await supabase.from('drivers').delete().in('id', [d1Id, d2Id]);
+  pass('Distribution merge cleanup complete');
 }
 
 // ── 7. Pending Balances ─────────────────────────────────────────────────────
@@ -809,6 +913,7 @@ async function main() {
     await testOrders();
     await testClients();
     await testDistribution();
+    await testDistributionMerge();
     await testBalances();
     await testConfig();
     await testWhatsApp();

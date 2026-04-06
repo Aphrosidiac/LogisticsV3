@@ -84,6 +84,53 @@ export async function getLatestDistribution(): Promise<DistributionResult | null
   }
 }
 
+export async function getDistributionByDate(targetDate: string): Promise<DistributionResult | null> {
+  try {
+    const { data, error } = await supabase
+      .from(TABLES.DISTRIBUTIONS)
+      .select('*')
+      .eq('target_date', targetDate)
+      .order('timestamp', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (error) return null;
+    const { skippedOrdersList, ...summaryRest } = data.summary || {};
+    return {
+      id: data.id,
+      assignments: data.assignments || [],
+      unassignedDrivers: data.unassigned_drivers || [],
+      skippedOrders: skippedOrdersList || [],
+      summary: summaryRest,
+      timestamp: data.timestamp,
+      targetDate: data.target_date,
+    };
+  } catch (error) {
+    console.error('Error getting distribution by date:', error);
+    return null;
+  }
+}
+
+export async function updateDistribution(id: string, distribution: DistributionResult): Promise<void> {
+  try {
+    const { error } = await supabase
+      .from(TABLES.DISTRIBUTIONS)
+      .update({
+        assignments: distribution.assignments,
+        summary: {
+          ...distribution.summary,
+          skippedOrdersList: distribution.skippedOrders || [],
+        },
+        timestamp: distribution.timestamp,
+      })
+      .eq('id', id);
+    if (error) throw error;
+  } catch (error) {
+    console.error('Error updating distribution:', error);
+    throw error;
+  }
+}
+
 export async function updateDistributionAssignments(id: string, assignments: DistributionResult['assignments']): Promise<void> {
   try {
     const { error } = await supabase
