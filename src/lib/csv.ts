@@ -5,7 +5,7 @@ import { generateId } from './utils';
 
 export interface ParsedCSV {
     headers: string[];
-    data: Record<string, any>[];
+    data: Record<string, unknown>[];
 }
 
 export async function parseCSVFile(file: File): Promise<ParsedCSV> {
@@ -18,7 +18,7 @@ export async function parseCSVFile(file: File): Promise<ParsedCSV> {
                 const headers = results.meta.fields || [];
                 resolve({
                     headers,
-                    data: results.data as Record<string, any>[],
+                    data: results.data as Record<string, unknown>[],
                 });
             },
             error: (error: Error) => {
@@ -38,7 +38,7 @@ export async function parseCSVText(text: string): Promise<ParsedCSV> {
                 const headers = results.meta.fields || [];
                 resolve({
                     headers,
-                    data: results.data as Record<string, any>[],
+                    data: results.data as Record<string, unknown>[],
                 });
             },
             error: (error: Error) => {
@@ -48,7 +48,7 @@ export async function parseCSVText(text: string): Promise<ParsedCSV> {
     });
 }
 
-export function csvToOrders(data: Record<string, any>[]): Order[] {
+export function csvToOrders(data: Record<string, unknown>[]): Order[] {
     const orders: Order[] = [];
 
     for (const row of data) {
@@ -74,7 +74,7 @@ export function csvToOrders(data: Record<string, any>[]): Order[] {
             pickup: pickupKey ? String(row[pickupKey] || '') : undefined,
             delivery: deliveryKey ? String(row[deliveryKey] || '') : undefined,
             invoice: invoiceKey ? String(row[invoiceKey] || '') : undefined,
-            rawData: row,
+            rawData: row as Record<string, string>,
         });
     }
 
@@ -82,7 +82,7 @@ export function csvToOrders(data: Record<string, any>[]): Order[] {
 }
 
 // New function to convert sheet data (with schema field names) to orders
-export function sheetDataToOrders(data: Record<string, any>[]): Order[] {
+export function sheetDataToOrders(data: Record<string, unknown>[]): Order[] {
     const orders: Order[] = [];
 
     for (const row of data) {
@@ -117,14 +117,14 @@ export function sheetDataToOrders(data: Record<string, any>[]): Order[] {
             pickup: pickup || undefined,
             delivery: delivery || undefined,
             invoice: invoice || undefined,
-            rawData: row,
+            rawData: row as Record<string, string>,
         });
     }
 
     return orders;
 }
 
-export function csvToDrivers(data: Record<string, any>[]): Driver[] {
+export function csvToDrivers(data: Record<string, unknown>[]): Driver[] {
     const drivers: Driver[] = [];
 
     for (const row of data) {
@@ -153,7 +153,7 @@ export function csvToDrivers(data: Record<string, any>[]): Driver[] {
 }
 
 // New function to convert sheet data (with schema field names) to drivers
-export function sheetDataToDrivers(data: Record<string, any>[]): Driver[] {
+export function sheetDataToDrivers(data: Record<string, unknown>[]): Driver[] {
     const drivers: Driver[] = [];
 
     for (const row of data) {
@@ -223,7 +223,7 @@ export function downloadCSV(filename: string, csvContent: string) {
     document.body.removeChild(link);
 }
 
-export function sheetDataToCSV(headers: string[], data: Record<string, any>[]): string {
+export function sheetDataToCSV(headers: string[], data: Record<string, unknown>[]): string {
     if (data.length === 0) return '';
     return Papa.unparse({ fields: headers, data });
 }

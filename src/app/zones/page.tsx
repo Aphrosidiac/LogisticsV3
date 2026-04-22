@@ -9,14 +9,11 @@ import {
   ChevronDown,
   ChevronRight,
   Save,
-  X,
   AlertCircle,
   Star,
   Calendar,
 } from 'lucide-react';
 import {
-  getAllZones,
-  getDistrictsByZone,
   createZone,
   updateZone,
   deleteZone,
@@ -94,7 +91,7 @@ export default function ZonesPage() {
     try {
       const data = await getZonesWithDistricts(false);
       setZones(data);
-    } catch (error) {
+    } catch {
       // silently fail — empty list is handled in UI
     } finally {
       setLoading(false);
@@ -155,7 +152,7 @@ export default function ZonesPage() {
       }
       setShowZoneModal(false);
       loadZones();
-    } catch (error) {
+    } catch {
       setFormError('Error saving zone. Please try again.');
     } finally {
       setSaving(false);
@@ -190,7 +187,7 @@ export default function ZonesPage() {
       }
       setDeleteConfirm(null);
       loadZones();
-    } catch (error) {
+    } catch {
       setDeleteError('An error occurred while deleting.');
     } finally {
       setDeleting(false);
@@ -239,7 +236,7 @@ export default function ZonesPage() {
       }
       setShowDistrictModal(false);
       loadZones();
-    } catch (error) {
+    } catch {
       setFormError('Error saving district. Please try again.');
     } finally {
       setSaving(false);

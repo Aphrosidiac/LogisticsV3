@@ -6,7 +6,9 @@ import ZoneDistrictSelector from './ZoneDistrictSelector';
 
 interface DynamicFieldProps {
     field: FieldSchema;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     value: any;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onChange: (value: any) => void;
     disabled?: boolean;
 }
@@ -42,7 +44,7 @@ export default function DynamicField({ field, value, onChange, disabled }: Dynam
                     // Look up zone and district names for display
                     const zones = cache.zones || [];
                     const zone = zones.find(z => z.id === zoneData.zone_id);
-                    const district = zone?.districts?.find((d: any) => d.id === zoneData.district_id);
+                    const district = zone?.districts?.find((d: { id: string; name?: string }) => d.id === zoneData.district_id);
                     // Store as JSON string with both IDs and names
                     onChange(JSON.stringify({
                         zone_id: zoneData.zone_id,

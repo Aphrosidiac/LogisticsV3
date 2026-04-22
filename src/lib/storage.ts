@@ -69,7 +69,7 @@ export async function uploadOrderAttachment(
     const filePath = generateFilePath(orderId, file.name);
 
     // Upload to Supabase Storage
-    const { data, error } = await supabase.storage
+    const { error } = await supabase.storage
       .from(ORDER_ATTACHMENTS_BUCKET)
       .upload(filePath, file, {
         cacheControl: '3600',
@@ -86,8 +86,8 @@ export async function uploadOrderAttachment(
       .getPublicUrl(filePath);
 
     return { success: true, url: urlData.publicUrl };
-  } catch (error: any) {
-    return { success: false, error: error.message || 'Upload failed' };
+  } catch (error: unknown) {
+    return { success: false, error: (error as Error).message || 'Upload failed' };
   }
 }
 
@@ -212,8 +212,8 @@ export async function uploadClientAttachment(
       .getPublicUrl(filePath);
 
     return { success: true, url: urlData.publicUrl };
-  } catch (error: any) {
-    return { success: false, error: error.message || 'Upload failed' };
+  } catch (error: unknown) {
+    return { success: false, error: (error as Error).message || 'Upload failed' };
   }
 }
 

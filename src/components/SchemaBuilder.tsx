@@ -110,7 +110,7 @@ export default function SchemaBuilder({ type, onSave, onCancel, initialSchema }:
         ]
     );
     const [unitName, setUnitName] = useState(initialSchema?.unitName || 'pallets');
-    const [dropdownOptions, setDropdownOptions] = useState<Record<string, string>>({});
+
 
     const addField = () => {
         const newField: FieldSchema = {
@@ -205,7 +205,7 @@ export default function SchemaBuilder({ type, onSave, onCancel, initialSchema }:
                             type="text"
                             value={name}
                             onChange={(e) => setName(e.target.value)}
-                            placeholder={`e.g., "Orders ${new Date().getFullYear()}" or "Delivery Drivers"`}
+                            placeholder={`e.g., &quot;Orders ${new Date().getFullYear()}&quot; or &quot;Delivery Drivers&quot;`}
                             className="input w-full"
                         />
                     </div>
@@ -224,7 +224,7 @@ export default function SchemaBuilder({ type, onSave, onCancel, initialSchema }:
                                 className="input w-full"
                             />
                             <p className="text-xs text-zinc-500 mt-1">
-                                This will be used in distribution reports (e.g., "50 pallets")
+                                This will be used in distribution reports (e.g., &quot;50 pallets&quot;)
                             </p>
                         </div>
                     )}
@@ -245,7 +245,7 @@ export default function SchemaBuilder({ type, onSave, onCancel, initialSchema }:
                         </div>
 
                         <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
-                            {fields.map((field, index) => (
+                            {fields.map((field) => (
                                 <div
                                     key={field.id}
                                     className="bg-zinc-800/70 border border-zinc-700 rounded-lg p-3 hover:border-zinc-600 transition-colors"
@@ -397,7 +397,7 @@ export default function SchemaBuilder({ type, onSave, onCancel, initialSchema }:
                     <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
                         <p className="text-sm text-blue-400">
                             <strong>Tip:</strong> Core fields (like Zone and Driver Name) cannot be removed as
-                            they're required for distribution calculation. You can add any custom fields you
+                            they&apos;re required for distribution calculation. You can add any custom fields you
                             need for your workflow.
                         </p>
                     </div>

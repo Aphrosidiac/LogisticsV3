@@ -14,11 +14,12 @@ import {
     MapPin,
     Calendar,
     ImageIcon,
-    Upload,
+    // Upload removed - unused
     Download,
     Phone,
     User,
     Paperclip,
+    Star,
 } from 'lucide-react';
 import * as db from '@/lib/db-supabase';
 import { uploadClientAttachment, deleteAttachment } from '@/lib/storage';
@@ -165,6 +166,11 @@ export default function ClientsPage() {
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2">
                                             <span className="text-sm font-medium text-zinc-200 truncate">{client.company_name}</span>
+                                            {client.is_default_pickup && (
+                                                <span className="flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 bg-amber-500/15 text-amber-400 border border-amber-500/25 rounded-full font-semibold uppercase tracking-wide shrink-0">
+                                                    <Star className="w-2.5 h-2.5" /> Default Pickup
+                                                </span>
+                                            )}
                                             {(client.attachment_urls || []).length > 0 && (
                                                 <Paperclip className="w-3 h-3 text-zinc-500 shrink-0" />
                                             )}
@@ -268,6 +274,14 @@ export default function ClientsPage() {
                         </div>
                         {/* Body */}
                         <div className="p-6 overflow-y-auto space-y-5">
+                            {/* Default Pickup Badge */}
+                            {viewClient.is_default_pickup && (
+                                <div className="flex items-center gap-2 px-3 py-2 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+                                    <Star className="w-4 h-4 text-amber-400" />
+                                    <span className="text-xs font-semibold text-amber-400">Default Pickup Company</span>
+                                </div>
+                            )}
+
                             {/* Contact & Phone */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
@@ -279,6 +293,17 @@ export default function ClientsPage() {
                                     <p className="text-sm text-zinc-300 mt-0.5 font-mono">{viewClient.phone || <span className="text-zinc-600">—</span>}</p>
                                 </div>
                             </div>
+
+                            {/* Address */}
+                            {(viewClient.address || viewClient.area || viewClient.state) && (
+                                <div>
+                                    <label className="text-[10px] font-semibold text-zinc-600 uppercase tracking-wider">Address</label>
+                                    <div className="text-sm text-zinc-300 mt-0.5 space-y-0.5">
+                                        {viewClient.address && <p>{viewClient.address}</p>}
+                                        <p>{[viewClient.area, viewClient.postcode, viewClient.state].filter(Boolean).join(', ')}</p>
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Date */}
                             {viewClient.date && (
@@ -315,6 +340,7 @@ export default function ClientsPage() {
                                     <div className="mt-1.5 space-y-2">
                                         {(viewClient.attachment_urls || []).map((url, j) => (
                                             <div key={j} className="flex items-center gap-3 p-2 bg-zinc-800/50 border border-zinc-700 rounded-lg">
+                                                {/* eslint-disable-next-line @next/next/no-img-element */}
                                                 <img src={url} alt="Attachment" className="w-12 h-12 object-cover rounded cursor-pointer hover:opacity-80 transition-opacity" onClick={() => openAttachment(url)} />
                                                 <div className="flex-1 min-w-0">
                                                     <button
@@ -407,7 +433,7 @@ function ClientForm({ initial, saving, onSave, onCancel, onViewAttachment }: {
     const [stagedFiles, setStagedFiles] = useState<File[]>([]);
     const [uploading, setUploading] = useState(false);
 
-    function set(key: keyof Client, value: any) {
+    function set(key: keyof Client, value: unknown) {
         setData(prev => ({ ...prev, [key]: value }));
         if (error) setError('');
     }
@@ -441,7 +467,7 @@ function ClientForm({ initial, saving, onSave, onCancel, onViewAttachment }: {
             return;
         }
         const cleanedLocations = (data.delivery_locations || []).filter(l => l.trim());
-        let attachmentUrls = [...(data.attachment_urls || [])];
+        const attachmentUrls = [...(data.attachment_urls || [])];
 
         if (stagedFiles.length > 0) {
             setUploading(true);
@@ -511,6 +537,83 @@ function ClientForm({ initial, saving, onSave, onCancel, onViewAttachment }: {
                 </div>
             </div>
 
+            {/* Address */}
+            <div>
+                <label className="text-xs font-medium text-zinc-300">Address</label>
+                <input
+                    type="text"
+                    value={data.address || ''}
+                    onChange={e => set('address', e.target.value)}
+                    placeholder="e.g. PT360, Jalan TPP 5/1, Taman Perindustrian Puchong"
+                    className="w-full mt-1 px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-zinc-200 text-sm focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30"
+                />
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+                <div>
+                    <label className="text-xs font-medium text-zinc-300">Postcode</label>
+                    <input
+                        type="text"
+                        value={data.postcode || ''}
+                        onChange={e => set('postcode', e.target.value)}
+                        placeholder="e.g. 47100"
+                        maxLength={5}
+                        className="w-full mt-1 px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-zinc-200 text-sm focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30"
+                    />
+                </div>
+                <div>
+                    <label className="text-xs font-medium text-zinc-300">Area / City</label>
+                    <input
+                        type="text"
+                        value={data.area || ''}
+                        onChange={e => set('area', e.target.value)}
+                        placeholder="e.g. Puchong"
+                        className="w-full mt-1 px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-zinc-200 text-sm focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30"
+                    />
+                </div>
+                <div>
+                    <label className="text-xs font-medium text-zinc-300">Negeri</label>
+                    <select
+                        value={data.state || ''}
+                        onChange={e => set('state', e.target.value)}
+                        className="w-full mt-1 px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-zinc-200 text-sm focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30"
+                    >
+                        <option value="">— Select —</option>
+                        <option value="Johor">Johor</option>
+                        <option value="Kedah">Kedah</option>
+                        <option value="Kelantan">Kelantan</option>
+                        <option value="Melaka">Melaka</option>
+                        <option value="Negeri Sembilan">Negeri Sembilan</option>
+                        <option value="Pahang">Pahang</option>
+                        <option value="Perak">Perak</option>
+                        <option value="Perlis">Perlis</option>
+                        <option value="Pulau Pinang">Pulau Pinang</option>
+                        <option value="Sabah">Sabah</option>
+                        <option value="Sarawak">Sarawak</option>
+                        <option value="Selangor">Selangor</option>
+                        <option value="Terengganu">Terengganu</option>
+                        <option value="W.P. Kuala Lumpur">W.P. Kuala Lumpur</option>
+                        <option value="W.P. Labuan">W.P. Labuan</option>
+                        <option value="W.P. Putrajaya">W.P. Putrajaya</option>
+                    </select>
+                </div>
+            </div>
+
+            {/* Default Pickup Toggle */}
+            <label className="flex items-center gap-3 px-3 py-2.5 bg-zinc-800/50 border border-zinc-700 rounded-lg cursor-pointer hover:bg-zinc-800 transition-colors">
+                <input
+                    type="checkbox"
+                    checked={data.is_default_pickup || false}
+                    onChange={e => set('is_default_pickup', e.target.checked)}
+                    className="w-4 h-4 rounded border-zinc-600 text-amber-500 focus:ring-amber-500/30 bg-zinc-700"
+                />
+                <div>
+                    <span className="text-sm font-medium text-zinc-200 flex items-center gap-1.5">
+                        <Star className="w-3.5 h-3.5 text-amber-400" /> Default Pickup Company
+                    </span>
+                    <p className="text-[10px] text-zinc-500 mt-0.5">Auto-fill this company as pickup when creating new orders</p>
+                </div>
+            </label>
+
             {/* Delivery Locations */}
             <div>
                 <div className="flex items-center justify-between mb-2">
@@ -570,6 +673,7 @@ function ClientForm({ initial, saving, onSave, onCancel, onViewAttachment }: {
                     <div className="mt-2 space-y-2">
                         {(data.attachment_urls || []).map((url, i) => (
                             <div key={i} className="flex items-center gap-2 p-2 bg-zinc-800/50 border border-zinc-700 rounded-lg">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
                                 <img
                                     src={url}
                                     alt="Attachment"

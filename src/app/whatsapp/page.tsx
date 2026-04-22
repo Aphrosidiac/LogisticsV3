@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
 import * as db from '@/lib/db-supabase';
+import type { WhatsAppMessage } from '@/types';
 import Image from 'next/image';
 
 type ConnectionStep = 'idle' | 'starting' | 'qr' | 'connected';
@@ -20,32 +21,22 @@ export default function WhatsAppPage() {
     const { addLog } = useApp();
     const [step, setStep] = useState<ConnectionStep>('idle');
     const [qrCode, setQrCode] = useState<string | null>(null);
-    const [messages, setMessages] = useState<any[]>([]);
+    const [messages, setMessages] = useState<WhatsAppMessage[]>([]);
     const [qrRefreshCount, setQrRefreshCount] = useState(0);
     const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const statusPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-    useEffect(() => {
-        checkStatus();
-        loadMessages();
-        return () => {
-            stopPolling();
-            stopStatusPoll();
-        };
-    }, []);
-
-    useEffect(() => {
-        if (step === 'connected') {
-            startStatusPoll();
-        } else {
-            stopStatusPoll();
-        }
-    }, [step]);
 
     function stopPolling() {
         if (pollRef.current) {
             clearInterval(pollRef.current);
             pollRef.current = null;
+        }
+    }
+
+    function stopStatusPoll() {
+        if (statusPollRef.current) {
+            clearInterval(statusPollRef.current);
+            statusPollRef.current = null;
         }
     }
 
@@ -66,13 +57,6 @@ export default function WhatsAppPage() {
         }, 30_000);
     }
 
-    function stopStatusPoll() {
-        if (statusPollRef.current) {
-            clearInterval(statusPollRef.current);
-            statusPollRef.current = null;
-        }
-    }
-
     async function checkStatus() {
         // Simple one-shot check on page load
         try {
@@ -90,10 +74,29 @@ export default function WhatsAppPage() {
         try {
             const msgs = await db.getAllWhatsAppMessages();
             setMessages(msgs);
-        } catch (error: any) {
-            addLog('error', 'Failed to load messages', error.message);
+        } catch (error: unknown) {
+            addLog('error', 'Failed to load messages', (error as Error).message);
         }
     }
+
+    useEffect(() => {
+        checkStatus();
+        loadMessages();
+        return () => {
+            stopPolling();
+            stopStatusPoll();
+        };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    useEffect(() => {
+        if (step === 'connected') {
+            startStatusPoll();
+        } else {
+            stopStatusPoll();
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [step]);
 
     async function handleConnect() {
         setStep('starting');
@@ -148,8 +151,8 @@ export default function WhatsAppPage() {
             setStep('idle');
             setQrCode(null);
             addLog('info', 'WhatsApp disconnected');
-        } catch (error: any) {
-            addLog('error', 'Failed to disconnect', error.message);
+        } catch (error: unknown) {
+            addLog('error', 'Failed to disconnect', (error as Error).message);
         }
     }
 
@@ -202,7 +205,7 @@ export default function WhatsAppPage() {
                             <ol className="text-xs text-zinc-500 space-y-1 list-decimal list-inside">
                                 <li>Open WhatsApp on your phone</li>
                                 <li>Tap Menu (⋮) → Linked Devices</li>
-                                <li>Tap "Link a Device" and scan below</li>
+                                <li>Tap &quot;Link a Device&quot; and scan below</li>
                             </ol>
                             <div className="bg-white p-3 rounded-xl inline-block">
                                 <Image
@@ -234,7 +237,7 @@ export default function WhatsAppPage() {
                     {step === 'idle' && (
                         <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
                             <p className="text-sm text-blue-400">
-                                Click Connect to generate a QR code. You'll scan it with your WhatsApp mobile app to link this device.
+                                Click Connect to generate a QR code. You&apos;ll scan it with your WhatsApp mobile app to link this device.
                             </p>
                         </div>
                     )}

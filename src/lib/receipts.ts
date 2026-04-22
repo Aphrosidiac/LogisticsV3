@@ -106,9 +106,9 @@ export async function uploadReceipt(
 
     console.log('Receipt saved to localStorage:', receipt);
     return { success: true, receipt };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Upload receipt error:', error);
-    return { success: false, error: error.message || 'Unknown error occurred' };
+    return { success: false, error: (error as Error).message || 'Unknown error occurred' };
   }
 }
 
@@ -126,9 +126,9 @@ export async function getReceiptsForRow(
     ).sort((a, b) => new Date(b.uploaded_at).getTime() - new Date(a.uploaded_at).getTime());
 
     return { success: true, receipts: filteredReceipts };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Get receipts error:', error);
-    return { success: false, receipts: [], error: error.message || 'Unknown error occurred' };
+    return { success: false, receipts: [], error: (error as Error).message || 'Unknown error occurred' };
   }
 }
 
@@ -149,9 +149,9 @@ export async function deleteReceipt(receiptId: string): Promise<{ success: boole
     saveStoredReceipts(updatedReceipts);
 
     return { success: true };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Delete receipt error:', error);
-    return { success: false, error: error.message || 'Unknown error occurred' };
+    return { success: false, error: (error as Error).message || 'Unknown error occurred' };
   }
 }
 
@@ -170,9 +170,9 @@ export async function deleteReceiptsForRow(
     saveStoredReceipts(updatedReceipts);
 
     return { success: true };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Delete receipts for row error:', error);
-    return { success: false, error: error.message || 'Unknown error occurred' };
+    return { success: false, error: (error as Error).message || 'Unknown error occurred' };
   }
 }
 

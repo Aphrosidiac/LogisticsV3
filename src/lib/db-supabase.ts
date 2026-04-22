@@ -3,23 +3,23 @@
 //   db-config.ts, db-orders.ts, db-drivers.ts, db-distributions.ts, db-logs.ts, db-whatsapp.ts
 
 export { getConfig, saveConfig, saveSchema, getSchema, setLastAutoDistributionDate } from './db-config';
-export { saveOrders, getAllOrders, clearOrders, addOrder, updateOrder, deleteOrder, updateOrdersToAssigned, getPendingOrderCountForDate, markOrdersAsCompleted } from './db-orders';
+export { saveOrders, getAllOrders, clearOrders, addOrder, updateOrder, deleteOrder, updateOrdersToAssigned, revertOrdersToPending, getPendingOrderCountForDate, markOrdersAsCompleted } from './db-orders';
 export { getAllClients, addClient, updateClient, deleteClient, clearClients } from './db-clients';
 export { saveDrivers, getAllDrivers, addDriver, updateDriver, deleteDriver, setDriverActive, getActiveDrivers, clearDrivers } from './db-drivers';
-export { saveDistribution, getAllDistributions, getDistribution, getLatestDistribution, getDistributionByDate, updateDistribution, updateDistributionAssignments } from './db-distributions';
+export { saveDistribution, getAllDistributions, getDistribution, getLatestDistribution, getDistributionByDate, deleteDistribution, updateDistribution, updateDistributionAssignments } from './db-distributions';
 export { addLog, getAllLogs, clearLogs } from './db-logs';
 export { addWhatsAppMessage, updateWhatsAppMessage, getAllWhatsAppMessages, getPendingWhatsAppMessages } from './db-whatsapp';
 
 // Sheet operations (kept inline — small and tightly coupled)
 import { supabase, TABLES } from './supabase';
-import type { Sheet } from '@/types';
+import type { Sheet, AppConfig, Order, Driver, Client } from '@/types';
 import { generateId } from './utils';
 
 export async function createSheet(
   name: string,
   type: 'orders' | 'drivers',
   headers: string[],
-  data: Record<string, any>[] = []
+  data: Record<string, unknown>[] = []
 ) {
   try {
     const sheet = {
@@ -131,7 +131,7 @@ import { getAllDrivers, clearDrivers, saveDrivers } from './db-drivers';
 import { getAllDistributions } from './db-distributions';
 import { getAllLogs, clearLogs } from './db-logs';
 import { getAllWhatsAppMessages } from './db-whatsapp';
-import { getAllClients, clearClients } from './db-clients';
+import { getAllClients } from './db-clients';
 import { saveConfig } from './db-config';
 
 export async function exportAllData() {
@@ -164,7 +164,13 @@ export async function exportAllData() {
   }
 }
 
-export async function importAllData(data: any) {
+export async function importAllData(data: {
+  config?: Partial<AppConfig>;
+  orders?: Order[];
+  drivers?: Driver[];
+  sheets?: Array<{ name: string; type: 'orders' | 'drivers'; headers: string[]; data: Record<string, unknown>[] }>;
+  clients?: Partial<Client>[];
+}) {
   try {
     await Promise.all([
       clearOrders(),
@@ -197,29 +203,29 @@ export async function importAllData(data: any) {
 }
 
 // History Operations (backward compat stubs)
-export async function addHistory(action: string, data: any) {
+export async function addHistory(action: string, data: unknown) {
   console.log('History tracking:', action, data);
 }
 
-export async function getHistory(limit: number = 50) {
+export async function getHistory() {
   return [];
 }
 
 // Real-time Subscriptions
-export function subscribeToOrders(callback: (payload: any) => void) {
+export function subscribeToOrders(callback: (payload: unknown) => void) {
   return supabase
     .channel('orders-changes')
     .on('postgres_changes', { event: '*', schema: 'public', table: TABLES.ORDERS }, callback)
     .subscribe();
 }
 
-export function subscribeToDrivers(callback: (payload: any) => void) {
+export function subscribeToDrivers(callback: (payload: unknown) => void) {
   return supabase
     .channel('drivers-changes')
     .on('postgres_changes', { event: '*', schema: 'public', table: TABLES.DRIVERS }, callback)
     .subscribe();
 }
 
-export function unsubscribe(subscription: any) {
+export function unsubscribe(subscription: ReturnType<typeof supabase.channel>) {
   return supabase.removeChannel(subscription);
 }

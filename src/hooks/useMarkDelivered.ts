@@ -2,12 +2,12 @@
 
 import { useState, useCallback } from 'react';
 import * as db from '@/lib/db-supabase';
-import type { DriverAssignment } from '@/types';
+import type { DriverAssignment, Order } from '@/types';
 
 interface UseMarkDeliveredResult {
   deliveredDrivers: Set<string>;
   markingDriverId: string | null;
-  markDelivered: (assignment: DriverAssignment, onOrdersUpdated?: (orders: any[]) => void) => Promise<void>;
+  markDelivered: (assignment: DriverAssignment, onOrdersUpdated?: (orders: Order[]) => void) => Promise<void>;
 }
 
 export function useMarkDelivered(
@@ -18,7 +18,7 @@ export function useMarkDelivered(
 
   const markDelivered = useCallback(async (
     assignment: DriverAssignment,
-    onOrdersUpdated?: (orders: any[]) => void,
+    onOrdersUpdated?: (orders: Order[]) => void,
   ) => {
     const driverId = assignment.driver.id;
     const orderIds = assignment.orders.map(o => o.id).filter(Boolean);
@@ -31,8 +31,8 @@ export function useMarkDelivered(
       onOrdersUpdated?.(updatedOrders);
       setDeliveredDrivers(prev => new Set([...prev, driverId]));
       addLog?.('success', `Marked ${orderIds.length} order(s) as completed for ${assignment.driver.name}`);
-    } catch (err: any) {
-      addLog?.('error', `Failed to mark delivered for ${assignment.driver.name}`, err.message);
+    } catch (err: unknown) {
+      addLog?.('error', `Failed to mark delivered for ${assignment.driver.name}`, (err as Error).message);
     } finally {
       setMarkingDriverId(null);
     }

@@ -175,7 +175,7 @@ export async function addOrder(order: Partial<Order>): Promise<Order> {
 
 export async function updateOrder(id: string, updates: Partial<Order>) {
   try {
-    const payload: Record<string, any> = {};
+    const payload: Record<string, unknown> = {};
     if (updates.zone !== undefined) payload.zone = updates.zone;
     if (updates.date !== undefined) payload.date = updates.date;
     if (updates.priority !== undefined) payload.priority = updates.priority;
@@ -263,10 +263,26 @@ export async function getPendingOrderCountForDate(date: string): Promise<number>
   }
 }
 
+export async function revertOrdersToPending(orderIds: string[]): Promise<void> {
+  if (orderIds.length === 0) return;
+  try {
+    const now = new Date().toISOString();
+    const { error } = await supabase
+      .from(TABLES.ORDERS)
+      .update({ status: 'pending', assigned_driver_id: null, updated_at: now })
+      .in('id', orderIds)
+      .eq('status', 'assigned');
+    if (error) throw error;
+  } catch (error) {
+    console.error('Error reverting orders to pending:', error);
+    throw error;
+  }
+}
+
 export async function markOrdersAsCompleted(orderIds: string[], driverId?: string): Promise<void> {
   if (orderIds.length === 0) return;
   try {
-    const payload: Record<string, any> = {
+    const payload: Record<string, unknown> = {
       status: 'completed',
       updated_at: new Date().toISOString(),
     };

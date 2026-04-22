@@ -16,6 +16,11 @@ export async function getAllClients(): Promise<Client[]> {
       company_name: row.company_name,
       contact_person: row.contact_person || undefined,
       phone: row.phone || undefined,
+      address: row.address || undefined,
+      postcode: row.postcode || undefined,
+      area: row.area || undefined,
+      state: row.state || undefined,
+      is_default_pickup: row.is_default_pickup || false,
       delivery_locations: row.delivery_locations || [],
       notes: row.notes || undefined,
       date: row.date || undefined,
@@ -39,6 +44,11 @@ export async function addClient(client: Partial<Client>): Promise<Client> {
       company_name: client.company_name || '',
       contact_person: client.contact_person || null,
       phone: client.phone || null,
+      address: client.address || null,
+      postcode: client.postcode || null,
+      area: client.area || null,
+      state: client.state || null,
+      is_default_pickup: client.is_default_pickup || false,
       delivery_locations: client.delivery_locations || [],
       notes: client.notes || null,
       date: client.date || null,
@@ -46,6 +56,10 @@ export async function addClient(client: Partial<Client>): Promise<Client> {
       num_ctn: client.num_ctn ?? 0,
       attachment_urls: client.attachment_urls || [],
     };
+
+    if (row.is_default_pickup) {
+      await clearDefaultPickup();
+    }
 
     const { error } = await supabase.from(TABLES.CLIENTS).insert(row);
     if (error) {
@@ -62,16 +76,25 @@ export async function addClient(client: Partial<Client>): Promise<Client> {
 
 export async function updateClient(id: string, updates: Partial<Client>) {
   try {
-    const payload: Record<string, any> = {};
+    const payload: Record<string, unknown> = {};
     if (updates.company_name !== undefined) payload.company_name = updates.company_name;
     if (updates.contact_person !== undefined) payload.contact_person = updates.contact_person || null;
     if (updates.phone !== undefined) payload.phone = updates.phone || null;
+    if (updates.address !== undefined) payload.address = updates.address || null;
+    if (updates.postcode !== undefined) payload.postcode = updates.postcode || null;
+    if (updates.area !== undefined) payload.area = updates.area || null;
+    if (updates.state !== undefined) payload.state = updates.state || null;
+    if (updates.is_default_pickup !== undefined) payload.is_default_pickup = updates.is_default_pickup;
     if (updates.delivery_locations !== undefined) payload.delivery_locations = updates.delivery_locations;
     if (updates.notes !== undefined) payload.notes = updates.notes || null;
     if (updates.date !== undefined) payload.date = updates.date || null;
     if (updates.num_pallet !== undefined) payload.num_pallet = updates.num_pallet ?? 0;
     if (updates.num_ctn !== undefined) payload.num_ctn = updates.num_ctn ?? 0;
     if (updates.attachment_urls !== undefined) payload.attachment_urls = updates.attachment_urls;
+
+    if (payload.is_default_pickup) {
+      await clearDefaultPickup(id);
+    }
 
     const { error } = await supabase.from(TABLES.CLIENTS).update(payload).eq('id', id);
     if (error) throw error;
@@ -101,5 +124,20 @@ export async function clearClients() {
   } catch (error) {
     console.error('Error clearing clients:', error);
     throw error;
+  }
+}
+
+async function clearDefaultPickup(excludeId?: string) {
+  try {
+    let query = supabase
+      .from(TABLES.CLIENTS)
+      .update({ is_default_pickup: false })
+      .eq('is_default_pickup', true);
+    if (excludeId) {
+      query = query.neq('id', excludeId);
+    }
+    await query;
+  } catch (error) {
+    console.error('Error clearing default pickup:', error);
   }
 }

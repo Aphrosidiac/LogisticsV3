@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Download, Upload, AlertTriangle, CheckCircle, Database } from 'lucide-react';
+import { Download, Upload, AlertTriangle, CheckCircle } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
 import * as db from '@/lib/db-supabase';
 
@@ -24,8 +24,8 @@ export default function BackupPage() {
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
             addLog('success', 'Data exported successfully');
-        } catch (error: any) {
-            addLog('error', 'Export failed', error.message);
+        } catch (error: unknown) {
+            addLog('error', 'Export failed', (error as Error).message);
         } finally {
             setIsExporting(false);
         }
@@ -43,8 +43,8 @@ export default function BackupPage() {
             await db.importAllData(data);
             addLog('success', 'Data imported successfully');
             window.location.reload();
-        } catch (error: any) {
-            addLog('error', 'Import failed', error.message);
+        } catch (error: unknown) {
+            addLog('error', 'Import failed', (error as Error).message);
         } finally {
             setIsImporting(false);
         }
@@ -154,7 +154,7 @@ export default function BackupPage() {
                 <div className="flex gap-3">
                     <CheckCircle className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
                     <div>
-                        <h3 className="font-medium text-white mb-2">What's Included</h3>
+                        <h3 className="font-medium text-white mb-2">What&apos;s Included</h3>
                         <ul className="text-sm text-zinc-400 space-y-1 list-disc list-inside">
                             <li>All database sheets (orders and drivers)</li>
                             <li>Current orders and drivers data</li>

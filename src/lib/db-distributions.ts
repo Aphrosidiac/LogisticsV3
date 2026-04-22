@@ -111,6 +111,19 @@ export async function getDistributionByDate(targetDate: string): Promise<Distrib
   }
 }
 
+export async function deleteDistribution(id: string): Promise<void> {
+  try {
+    const { error } = await supabase
+      .from(TABLES.DISTRIBUTIONS)
+      .delete()
+      .eq('id', id);
+    if (error) throw error;
+  } catch (error) {
+    console.error('Error deleting distribution:', error);
+    throw error;
+  }
+}
+
 export async function updateDistribution(id: string, distribution: DistributionResult): Promise<void> {
   try {
     const { error } = await supabase

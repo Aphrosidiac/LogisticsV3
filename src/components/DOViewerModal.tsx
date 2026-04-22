@@ -84,6 +84,7 @@ export default function DOViewerModal({ url, filename, onClose }: DOViewerModalP
                 {/* Body */}
                 <div className="flex-1 overflow-auto flex items-center justify-center bg-zinc-950 min-h-0">
                     {isImage(displayName) ? (
+                        /* eslint-disable-next-line @next/next/no-img-element */
                         <img
                             src={url}
                             alt={displayName}

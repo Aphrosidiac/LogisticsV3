@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 
-interface ModalState<T = any> {
+interface ModalState<T = unknown> {
   isOpen: boolean;
   data: T | null;
   open: (data?: T) => void;
@@ -8,7 +8,7 @@ interface ModalState<T = any> {
   toggle: () => void;
 }
 
-export function useModal<T = any>(initialOpen = false): ModalState<T> {
+export function useModal<T = unknown>(initialOpen = false): ModalState<T> {
   const [isOpen, setIsOpen] = useState(initialOpen);
   const [data, setData] = useState<T | null>(null);
 

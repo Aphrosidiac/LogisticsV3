@@ -50,6 +50,7 @@ export default function AdminPage() {
 
     useEffect(() => {
         wa.checkStatus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     useEffect(() => {
@@ -100,8 +101,8 @@ export default function AdminPage() {
             addLog('info', 'Distribution timer reset — cron will run again today');
             setResetDone(true);
             setTimeout(() => setResetDone(false), 3000);
-        } catch (err: any) {
-            addLog('error', 'Failed to reset distribution timer', err.message);
+        } catch (err: unknown) {
+            addLog('error', 'Failed to reset distribution timer', (err as Error).message);
         } finally {
             setIsResetting(false);
         }
@@ -117,8 +118,8 @@ export default function AdminPage() {
             await db.saveConfig(updatedConfig);
             dispatch({ type: 'SET_CONFIG', payload: updatedConfig });
             addLog('info', newPaused ? 'Auto-distribution paused' : 'Auto-distribution resumed');
-        } catch (err: any) {
-            addLog('error', 'Failed to toggle distribution pause', err.message);
+        } catch (err: unknown) {
+            addLog('error', 'Failed to toggle distribution pause', (err as Error).message);
         } finally {
             setIsTogglingPause(false);
         }
@@ -135,8 +136,8 @@ export default function AdminPage() {
             setScheduleSaved(true);
             addLog('info', `Distribution schedule set to ${distributionTime}`);
             setTimeout(() => setScheduleSaved(false), 3000);
-        } catch (err: any) {
-            addLog('error', 'Failed to save distribution schedule', err.message);
+        } catch (err: unknown) {
+            addLog('error', 'Failed to save distribution schedule', (err as Error).message);
         } finally {
             setIsSavingSchedule(false);
         }

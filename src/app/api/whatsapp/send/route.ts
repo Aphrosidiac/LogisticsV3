@@ -35,12 +35,12 @@ export const POST = withAuth(async (request: NextRequest) => {
         { status: 500 }
       );
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('WhatsApp send error:', error);
     return NextResponse.json(
       {
         status: 'error',
-        message: error.message || 'Failed to send message',
+        message: (error as Error).message || 'Failed to send message',
       },
       { status: 500 }
     );
@@ -67,12 +67,12 @@ export const PUT = withAuth(async (request: NextRequest) => {
       message: 'Batch send completed',
       results,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('WhatsApp batch send error:', error);
     return NextResponse.json(
       {
         status: 'error',
-        message: error.message || 'Failed to send messages',
+        message: (error as Error).message || 'Failed to send messages',
       },
       { status: 500 }
     );

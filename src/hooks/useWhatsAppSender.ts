@@ -68,8 +68,8 @@ export function useWhatsAppSender(
         if (addLog && logMessage) addLog('error', `Failed: ${logMessage}`, data.message);
         return false;
       }
-    } catch (err: any) {
-      setSendStates(prev => ({ ...prev, [trackingKey]: { status: 'failed', error: err.message } }));
+    } catch (err: unknown) {
+      setSendStates(prev => ({ ...prev, [trackingKey]: { status: 'failed', error: (err as Error).message } }));
       return false;
     }
   }, [addLog]);
@@ -118,10 +118,10 @@ export function useWhatsAppSender(
         if (failCount > 0) addLog('warning', `Failed to send to ${failCount} recipient(s)`);
       }
       setTimeout(() => setBroadcastStatus('idle'), 4000);
-    } catch (err: any) {
+    } catch (err: unknown) {
       setBroadcastStatus('failed');
-      setBroadcastError(err.message);
-      if (addLog) addLog('error', 'Broadcast failed', err.message);
+      setBroadcastError((err as Error).message);
+      if (addLog) addLog('error', 'Broadcast failed', (err as Error).message);
     }
   }, [addLog]);
 

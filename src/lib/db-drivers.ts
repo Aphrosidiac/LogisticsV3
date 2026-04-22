@@ -3,19 +3,20 @@ import { supabase, TABLES } from './supabase';
 import type { Driver } from '@/types';
 import { generateId } from './utils';
 
-function mapDriverRow(row: any): Driver {
+function mapDriverRow(row: Record<string, unknown>): Driver {
+  const rawData = row.raw_data as Record<string, unknown> | undefined;
   return {
-    id: row.id,
-    name: row.name,
-    identifier: row.identifier,
-    home_region: row.home_region,
-    max_capacity: row.max_capacity,
-    phone: row.phone || row.raw_data?.phone || undefined,
+    id: row.id as string,
+    name: row.name as string,
+    identifier: row.identifier as string,
+    home_region: row.home_region as string | undefined,
+    max_capacity: row.max_capacity as number | undefined,
+    phone: (row.phone || rawData?.phone || undefined) as string | undefined,
     is_active: row.is_active !== false,
   };
 }
 
-export async function saveDrivers(drivers: Driver[], sheetId?: string) {
+export async function saveDrivers(drivers: Driver[]) {
   try {
     const driversToInsert = drivers.map((driver) => ({
       id: driver.id || generateId(),
@@ -77,7 +78,7 @@ export async function addDriver(driver: Driver) {
 
 export async function updateDriver(id: string, updates: Partial<Driver>) {
   try {
-    const updatePayload: Record<string, any> = {};
+    const updatePayload: Record<string, unknown> = {};
     if (updates.name !== undefined) updatePayload.name = updates.name;
     if (updates.identifier !== undefined) updatePayload.identifier = updates.identifier;
     if (updates.home_region !== undefined) updatePayload.home_region = updates.home_region || null;

@@ -125,7 +125,7 @@ export interface Sheet {
   name: string;
   type: 'orders' | 'drivers';
   headers: string[];
-  data: Record<string, any>[];
+  data: Record<string, unknown>[];
   createdAt: string;
   updatedAt: string;
 }
@@ -158,7 +158,7 @@ export interface FieldSchema {
   isUnitField?: boolean; // For orders: marks the quantity field used in distribution
   isCoreField?: boolean; // Cannot be deleted (zone, driver name, etc.)
   options?: string[]; // For dropdown type
-  defaultValue?: any;
+  defaultValue?: string | number | boolean;
 }
 
 export interface TableSchema {
@@ -194,6 +194,11 @@ export interface Client {
   company_name: string;
   contact_person?: string;
   phone?: string;
+  address?: string;
+  postcode?: string;
+  area?: string;
+  state?: string;
+  is_default_pickup?: boolean;
   delivery_locations: string[];
   notes?: string;
   date?: string;

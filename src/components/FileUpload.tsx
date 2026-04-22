@@ -107,9 +107,9 @@ export default function FileUpload({
       if (result.errors.length > 0 && onError) {
         onError(result.errors);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (onError) {
-        onError([error.message || 'Upload failed']);
+        onError([(error as Error).message || 'Upload failed']);
       }
     } finally {
       setUploading(false);
@@ -219,6 +219,7 @@ export default function FileUpload({
               >
                 <div className="flex items-center gap-3">
                   {isImage ? (
+                    /* eslint-disable-next-line @next/next/no-img-element */
                     <img
                       src={url}
                       alt={fileName}

@@ -20,6 +20,7 @@ import {
     Clock,
     PackageCheck,
     SkipForward,
+    RotateCcw,
 } from 'lucide-react';
 import Link from 'next/link';
 import * as db from '@/lib/db-supabase';
@@ -35,6 +36,8 @@ export default function DistributionPage() {
     const [isSending, setIsSending] = useState(false);
     const [confirmMarkAll, setConfirmMarkAll] = useState(false);
     const [isMarkingAll, setIsMarkingAll] = useState(false);
+    const [isCancelRedistributing, setIsCancelRedistributing] = useState(false);
+    const [confirmCancelRedistribute, setConfirmCancelRedistribute] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [targetDate, setTargetDate] = useState(() => {
         const distDate = cache.lastDistribution?.targetDate;
@@ -56,12 +59,14 @@ export default function DistributionPage() {
     useEffect(() => {
         wa.checkStatus();
         loadDriverPhones();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     useEffect(() => {
         loadPendingCount();
         // Load existing distribution for the selected date
         loadDistributionForDate(targetDate);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [targetDate]);
 
     async function loadDistributionForDate(date: string) {
@@ -242,8 +247,8 @@ export default function DistributionPage() {
             }
 
             addLog('success', `Marked ${assignment.driver.name}'s orders as delivered`);
-        } catch (err: any) {
-            addLog('error', `Failed to mark delivered for ${assignment.driver.name}`, err.message);
+        } catch (err: unknown) {
+            addLog('error', `Failed to mark delivered for ${assignment.driver.name}`, (err as Error).message);
             throw err;
         }
     };
@@ -264,10 +269,50 @@ export default function DistributionPage() {
             await db.updateDistributionAssignments(distribution.id, updatedAssignments);
             dispatch({ type: 'SET_DISTRIBUTION', payload: { ...distribution, assignments: updatedAssignments } });
             addLog('success', `Marked all ${pending.length} driver assignment(s) as delivered`);
-        } catch (err: any) {
-            addLog('error', 'Failed to mark all as delivered', err.message);
+        } catch (err: unknown) {
+            addLog('error', 'Failed to mark all as delivered', (err as Error).message);
         } finally {
             setIsMarkingAll(false);
+        }
+    };
+
+    const handleCancelRedistribute = async () => {
+        setIsCancelRedistributing(true);
+        setConfirmCancelRedistribute(false);
+        setError(null);
+
+        try {
+            addLog('info', `Cancelling and redistributing for ${targetDate}...`);
+
+            const response = await fetch('/api/distribution/cancel-redistribute', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ targetDate }),
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || 'Failed to cancel and redistribute');
+            }
+
+            if (data.redistributed && data.result) {
+                dispatch({ type: 'SET_DISTRIBUTION', payload: data.result });
+                addLog('success', `Redistribution complete: ${data.result.summary.assignedDrivers} drivers, ${data.result.summary.totalOrders} orders`);
+            } else {
+                dispatch({ type: 'SET_DISTRIBUTION', payload: null });
+                addLog('warning', `Distribution cancelled. ${data.message || 'No pending orders to redistribute.'}`);
+            }
+
+            const updatedOrders = await db.getAllOrders();
+            dispatch({ type: 'SET_ORDERS', payload: updatedOrders });
+            await loadPendingCount();
+        } catch (err) {
+            const message = err instanceof Error ? err.message : 'Cancel & redistribute failed';
+            setError(message);
+            addLog('error', 'Cancel & redistribute failed', message);
+        } finally {
+            setIsCancelRedistributing(false);
         }
     };
 
@@ -546,6 +591,38 @@ export default function DistributionPage() {
                         </div>
                         <span className="text-zinc-600">·</span>
                         <span className="text-zinc-400">Capacity-Constrained Priority Routing</span>
+
+                        <span className="ml-auto" />
+                        {isCancelRedistributing ? (
+                            <span className="flex items-center gap-1.5 text-amber-400">
+                                <RefreshCw className="w-3 h-3 animate-spin" />
+                                Redistributing...
+                            </span>
+                        ) : confirmCancelRedistribute ? (
+                            <div className="flex items-center gap-2">
+                                <span className="text-zinc-400">Cancel current &amp; redo?</span>
+                                <button
+                                    onClick={handleCancelRedistribute}
+                                    className="px-2.5 py-1 rounded-lg text-xs font-medium bg-emerald-600 text-white hover:bg-emerald-500 transition-colors"
+                                >
+                                    Confirm
+                                </button>
+                                <button
+                                    onClick={() => setConfirmCancelRedistribute(false)}
+                                    className="px-2.5 py-1 rounded-lg text-xs font-medium text-zinc-400 bg-zinc-700/50 hover:bg-zinc-700 transition-colors"
+                                >
+                                    No
+                                </button>
+                            </div>
+                        ) : (
+                            <button
+                                onClick={() => setConfirmCancelRedistribute(true)}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20 transition-colors"
+                            >
+                                <RotateCcw className="w-3 h-3" />
+                                Cancel &amp; Redistribute
+                            </button>
+                        )}
                     </div>
 
                     {/* Skipped orders alert */}

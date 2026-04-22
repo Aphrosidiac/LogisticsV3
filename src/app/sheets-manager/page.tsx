@@ -26,11 +26,12 @@ import {
 } from 'lucide-react';
 import DOViewerModal from '@/components/DOViewerModal';
 import ZoneDistrictSelector from '@/components/ZoneDistrictSelector';
+import PickupSelector from '@/components/PickupSelector';
 import { uploadOrderAttachment, deleteAttachment } from '@/lib/storage';
 import { useApp } from '@/context/AppContext';
 import * as db from '@/lib/db-supabase';
 import * as csv from '@/lib/csv';
-import type { Order, Driver } from '@/types';
+import type { Order, Driver, Client } from '@/types';
 import { generateId, formatDisplayDate } from '@/lib/utils';
 import { ORDER_COLS, DRIVER_COLS, PRIORITY_STYLE, STATUS_STYLE, STATUS_ROW_ACCENT, type ColDef } from '@/lib/column-defs';
 
@@ -126,7 +127,7 @@ function validateDriver(data: Partial<Driver>): Record<string, string> {
 
 function ordersToCSV(orders: Order[], drivers: Driver[]): string {
     const driverMap = new Map(drivers.map(d => [d.id, d.name]));
-    const headers = ['DO Number', 'Invoice Number', 'Delivery Date', 'Zone', 'Pickup', 'Delivery', 'Pallets', 'CTN Amount', 'CTN per Pallet', 'Priority', 'Status', 'Driver'];
+    const headers = ['DO Number', 'Invoice Number / Company Name', 'Delivery Date', 'Zone', 'Pickup', 'Delivery', 'Pallets', 'CTN Amount', 'CTN per Pallet', 'Priority', 'Status', 'Driver'];
     const rows = orders.map(o => [
         o.do_number || '',
         o.invoice_number || '',
@@ -224,7 +225,7 @@ export default function DatabaseManagerPage() {
         if (orderDateFrom) result = result.filter(o => o.date >= orderDateFrom);
         if (orderDateTo) result = result.filter(o => o.date <= orderDateTo);
         result.sort((a, b) => {
-            let av: any, bv: any;
+            let av: string | number, bv: string | number;
             switch (orderSort.field) {
                 case 'date': av = a.date || ''; bv = b.date || ''; break;
                 case 'zone': av = a.zone?.toLowerCase() || ''; bv = b.zone?.toLowerCase() || ''; break;
@@ -251,7 +252,7 @@ export default function DatabaseManagerPage() {
         if (driverStatusFilter === 'active') result = result.filter(d => d.is_active !== false);
         else if (driverStatusFilter === 'inactive') result = result.filter(d => d.is_active === false);
         result.sort((a, b) => {
-            let av: any, bv: any;
+            let av: string | number, bv: string | number;
             switch (driverSort.field) {
                 case 'name': av = a.name?.toLowerCase() || ''; bv = b.name?.toLowerCase() || ''; break;
                 case 'max_capacity': av = a.max_capacity ?? 0; bv = b.max_capacity ?? 0; break;
@@ -261,6 +262,7 @@ export default function DatabaseManagerPage() {
             return driverSort.dir === 'asc' ? cmp : -cmp;
         });
         return result;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [drivers, driverSearch, driverSort]);
 
     function toggleOrderSort(field: string) {
@@ -283,6 +285,7 @@ export default function DatabaseManagerPage() {
     const driverTotalPages = Math.max(1, Math.ceil(filteredDrivers.length / driverPageSize));
     const pagedDrivers = filteredDrivers.slice((driverPage - 1) * driverPageSize, driverPage * driverPageSize);
 
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => { loadAll(); }, []);
 
     async function loadAll() {
@@ -293,8 +296,8 @@ export default function DatabaseManagerPage() {
             setDrivers(d);
             dispatch({ type: 'SET_ORDERS', payload: o });
             dispatch({ type: 'SET_DRIVERS', payload: d });
-        } catch (err: any) {
-            addLog('error', 'Failed to load data', err.message);
+        } catch (err: unknown) {
+            addLog('error', 'Failed to load data', (err as Error).message);
         } finally {
             setLoading(false);
         }
@@ -348,8 +351,8 @@ export default function DatabaseManagerPage() {
             }
 
             setOrderModal(null);
-        } catch (err: any) {
-            addLog('error', 'Failed to save order', err.message);
+        } catch (err: unknown) {
+            addLog('error', 'Failed to save order', (err as Error).message);
         } finally {
             setSaving(false);
         }
@@ -363,8 +366,8 @@ export default function DatabaseManagerPage() {
             setOrders(updated);
             dispatch({ type: 'SET_ORDERS', payload: updated });
             addLog('success', 'Order deleted');
-        } catch (err: any) {
-            addLog('error', 'Failed to delete order', err.message);
+        } catch (err: unknown) {
+            addLog('error', 'Failed to delete order', (err as Error).message);
         } finally {
             setDeletingId(null);
             setConfirmDeleteOrderId(null);
@@ -388,8 +391,8 @@ export default function DatabaseManagerPage() {
                 addLog('success', 'Driver updated');
             }
             setDriverModal(null);
-        } catch (err: any) {
-            addLog('error', 'Failed to save driver', err.message);
+        } catch (err: unknown) {
+            addLog('error', 'Failed to save driver', (err as Error).message);
         } finally {
             setSaving(false);
         }
@@ -403,8 +406,8 @@ export default function DatabaseManagerPage() {
             setDrivers(updated);
             dispatch({ type: 'SET_DRIVERS', payload: updated });
             addLog('success', 'Driver deleted');
-        } catch (err: any) {
-            addLog('error', 'Failed to delete driver', err.message);
+        } catch (err: unknown) {
+            addLog('error', 'Failed to delete driver', (err as Error).message);
         } finally {
             setDeletingId(null);
             setConfirmDeleteDriverId(null);
@@ -419,8 +422,8 @@ export default function DatabaseManagerPage() {
             setDrivers(updated);
             dispatch({ type: 'SET_DRIVERS', payload: updated });
             addLog('success', `Driver ${driver.name} ${newState ? 'activated' : 'deactivated'}`);
-        } catch (err: any) {
-            addLog('error', `Failed to ${newState ? 'activate' : 'deactivate'} driver`, err.message);
+        } catch (err: unknown) {
+            addLog('error', `Failed to ${newState ? 'activate' : 'deactivate'} driver`, (err as Error).message);
         }
     }
 
@@ -486,8 +489,8 @@ export default function DatabaseManagerPage() {
 
             await loadAll();
             addLog('success', `CSV import: ${imported} orders added${failed > 0 ? `, ${failed} skipped (validation failed)` : ''}`);
-        } catch (err: any) {
-            addLog('error', 'CSV import failed', err.message);
+        } catch (err: unknown) {
+            addLog('error', 'CSV import failed', (err as Error).message);
         }
     }
 
@@ -1175,9 +1178,63 @@ function OrderForm({ initial, saving, onSave, onCancel }: {
     const [touched, setTouched] = useState<Record<string, boolean>>({});
     const [pendingFile, setPendingFile] = useState<File | null>(null);
     const [removeAttachment, setRemoveAttachment] = useState(false);
+    const [clients, setClients] = useState<Client[]>([]);
+    const [selectedPickupClientId, setSelectedPickupClientId] = useState<string | undefined>();
 
     const savedUrl = removeAttachment ? undefined : (initial.attachment_urls?.[0]);
 
+    function applyPickupClient(client: Client) {
+        setData(prev => ({
+            ...prev,
+            pickup_company: client.company_name,
+            pickup_address: client.address || '',
+            pickup_postcode: client.postcode || '',
+            pickup_area: client.area || '',
+            pickup_state: client.state || '',
+            pickup_phone: client.phone || '',
+        }));
+    }
+
+    useEffect(() => {
+        db.getAllClients().then(list => {
+            setClients(list);
+            if (!initial.id) {
+                const defaultClient = list.find(c => c.is_default_pickup);
+                if (defaultClient && !data.pickup_company) {
+                    applyPickupClient(defaultClient);
+                    setSelectedPickupClientId(defaultClient.id);
+                }
+            }
+        });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    function handlePickupSelect(client: Client) {
+        setSelectedPickupClientId(client.id);
+        applyPickupClient(client);
+    }
+
+    function handlePickupClear() {
+        setSelectedPickupClientId(undefined);
+        setData(prev => ({
+            ...prev,
+            pickup_company: '',
+            pickup_address: '',
+            pickup_postcode: '',
+            pickup_area: '',
+            pickup_state: '',
+            pickup_phone: '',
+        }));
+    }
+
+    async function handlePickupQuickAdd(companyName: string) {
+        const newClient = await db.addClient({ company_name: companyName, delivery_locations: [] });
+        setClients(prev => [...prev, newClient].sort((a, b) => a.company_name.localeCompare(b.company_name)));
+        setSelectedPickupClientId(newClient.id);
+        setData(prev => ({ ...prev, pickup_company: companyName }));
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     function set(key: string, value: any) {
         setData(prev => ({ ...prev, [key]: value }));
         if (errors[key]) setErrors(prev => { const n = { ...prev }; delete n[key]; return n; });
@@ -1330,7 +1387,13 @@ function OrderForm({ initial, saving, onSave, onCancel }: {
                 </legend>
                 <div className="space-y-1">
                     <label className="text-xs font-medium text-zinc-300">Company Name</label>
-                    <input type="text" value={data.pickup_company || ''} onChange={e => set('pickup_company', e.target.value)} placeholder="e.g. Color Pigment (M) Sdn Bhd" className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-zinc-200 text-sm focus:outline-none focus:ring-1 focus:border-emerald-500 focus:ring-emerald-500/30 transition-colors" />
+                    <PickupSelector
+                        clients={clients}
+                        value={selectedPickupClientId}
+                        onSelect={handlePickupSelect}
+                        onClear={handlePickupClear}
+                        onQuickAdd={handlePickupQuickAdd}
+                    />
                 </div>
                 <div className="space-y-1">
                     <label className="text-xs font-medium text-zinc-300">Address</label>
@@ -1539,6 +1602,7 @@ function DriverForm({ initial, saving, onSave, onCancel }: {
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [touched, setTouched] = useState<Record<string, boolean>>({});
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     function set(key: string, value: any) {
         setData(prev => ({ ...prev, [key]: value }));
         if (errors[key]) setErrors(prev => { const n = { ...prev }; delete n[key]; return n; });
@@ -1606,8 +1670,10 @@ function DriverForm({ initial, saving, onSave, onCancel }: {
 
 function FormField({ col, value, error, onChange }: {
     col: ColDef;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     value: any;
     error?: string;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onChange: (value: any) => void;
 }) {
     const inputClass = `w-full px-3 py-2 bg-zinc-800 border rounded-lg text-zinc-200 text-sm focus:outline-none focus:ring-1 transition-colors ${

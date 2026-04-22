@@ -83,9 +83,9 @@ export default function CompletedOrdersPage() {
     if (dateEnd) result = result.filter(o => o.completed_date <= dateEnd + 'T23:59:59');
 
     result.sort((a, b) => {
-      let av: any, bv: any;
+      let av: string | number, bv: string | number;
       if (sortField === 'completed_date') { av = a.completed_date; bv = b.completed_date; }
-      else if (sortField === 'zone') { av = a.zone?.toLowerCase(); bv = b.zone?.toLowerCase(); }
+      else if (sortField === 'zone') { av = a.zone?.toLowerCase() ?? ''; bv = b.zone?.toLowerCase() ?? ''; }
       else { av = a.pallets; bv = b.pallets; }
       const cmp = av < bv ? -1 : av > bv ? 1 : 0;
       return sortDir === 'asc' ? cmp : -cmp;
@@ -116,7 +116,7 @@ export default function CompletedOrdersPage() {
   }
 
   const exportToCSV = () => {
-    const headers = ['DO Number', 'Invoice', 'Zone', 'Pickup', 'Delivery', 'Pallets', 'Priority', 'Order Date', 'Completed Date', 'Driver'];
+    const headers = ['DO Number', 'Invoice / Company', 'Zone', 'Pickup', 'Delivery', 'Pallets', 'Priority', 'Order Date', 'Completed Date', 'Driver'];
     const csvData = filteredAndSortedOrders.map(order => [
       order.do_number || '',
       order.invoice || '',
@@ -352,7 +352,7 @@ export default function CompletedOrdersPage() {
                         <FileText className="w-4 h-4 text-zinc-400" />
                         <span className="text-white font-medium">{order.do_number || 'No DO #'}</span>
                       </div>
-                      {order.invoice && <p className="text-sm text-zinc-400">Invoice: {order.invoice}</p>}
+                      {order.invoice && <p className="text-sm text-zinc-400">Inv# / Company: {order.invoice}</p>}
                     </div>
                   </td>
                   <td className="px-4 py-4">

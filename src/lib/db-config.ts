@@ -93,7 +93,7 @@ export async function saveConfig(config: Partial<AppConfig>) {
   }
 }
 
-export async function saveSchema(type: 'orders' | 'drivers', schema: any) {
+export async function saveSchema(type: 'orders' | 'drivers', schema: unknown) {
   try {
     const config = await getConfig();
     await saveConfig({

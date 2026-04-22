@@ -227,3 +227,37 @@ CREATE TRIGGER update_app_config_updated_at BEFORE UPDATE ON app_config FOR EACH
 CREATE TRIGGER update_whatsapp_messages_updated_at BEFORE UPDATE ON whatsapp_messages FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_zones_updated_at BEFORE UPDATE ON zones FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_districts_updated_at BEFORE UPDATE ON districts FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- ============================================================================
+-- Clients table (pickup company directory)
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS clients (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  company_name TEXT NOT NULL,
+  contact_person TEXT,
+  phone TEXT,
+  address TEXT,
+  postcode TEXT,
+  area TEXT,
+  state TEXT,
+  is_default_pickup BOOLEAN DEFAULT false,
+  delivery_locations TEXT[] DEFAULT '{}',
+  notes TEXT,
+  date DATE,
+  num_pallet NUMERIC DEFAULT 0,
+  num_ctn NUMERIC DEFAULT 0,
+  attachment_urls TEXT[],
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_clients_company_name ON clients(company_name);
+CREATE TRIGGER update_clients_updated_at BEFORE UPDATE ON clients FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Migration: add pickup address fields to existing clients table
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS address TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS postcode TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS area TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS state TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS is_default_pickup BOOLEAN DEFAULT false;

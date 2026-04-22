@@ -9,7 +9,7 @@ export const POST = withInternalAuth(async (request: NextRequest) => {
     const { connected } = await request.json();
     await db.saveConfig({ whatsappConnected: !!connected });
     return NextResponse.json({ ok: true });
-  } catch (error: any) {
-    return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return NextResponse.json({ ok: false, error: (error as Error).message }, { status: 500 });
   }
 });

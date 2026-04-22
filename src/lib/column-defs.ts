@@ -9,7 +9,7 @@ export interface ColDef {
     min?: number;
     max?: number;
     step?: number;
-    defaultValue?: any;
+    defaultValue?: string | number | boolean;
     options?: { value: string; label: string }[];
     placeholder?: string;
     hint?: string;
@@ -21,8 +21,8 @@ export const ORDER_COLS: ColDef[] = [
         placeholder: 'e.g. DO-2025-001', hint: 'Delivery order reference number',
     },
     {
-        key: 'invoice_number', label: 'Invoice Number', shortLabel: 'Invoice #', type: 'text',
-        placeholder: 'e.g. INV-001',
+        key: 'invoice_number', label: 'Invoice Number / Company Name', shortLabel: 'Inv# / Company', type: 'text',
+        placeholder: 'e.g. INV-001 or TRUSPACK',
     },
     {
         key: 'date', label: 'Delivery Date', type: 'date', required: true,
@@ -52,7 +52,7 @@ export const ORDER_COLS: ColDef[] = [
     },
     {
         key: 'ctn_to_pallet_ratio', label: 'CTN per Pallet', shortLabel: 'CTN Ratio', type: 'number',
-        min: 1, step: 1, placeholder: '—',
+        min: 0, step: 1, placeholder: '—',
         hint: 'How many cartons equal one pallet (e.g. 40 means 40 CTN = 1 pallet)',
     },
     {

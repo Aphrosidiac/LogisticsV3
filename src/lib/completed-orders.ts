@@ -151,24 +151,24 @@ export async function getCompletedOrders(): Promise<CompletedOrder[]> {
 
     if (error) throw error;
 
-    return (data || []).map((order: any) => ({
-      id: order.id,
-      zone: order.zone,
-      date: order.date,
-      pallets: order.pallets,
-      priority: order.priority,
-      status: order.status,
-      do_number: order.do_number,
-      invoice_number: order.invoice_number,
-      invoice: order.invoice_number,
-      pickup: order.pickup,
-      delivery: order.delivery,
-      ctn_amount: order.ctn_amount,
-      ctn_to_pallet_ratio: order.ctn_to_pallet_ratio,
-      rawData: order.raw_data || {},
-      completed_date: order.updated_at,
-      assigned_driver_id: order.assigned_driver_id || undefined,
-      attachment_urls: order.attachment_urls || [],
+    return (data || []).map((order: Record<string, unknown>) => ({
+      id: order.id as string,
+      zone: order.zone as string,
+      date: order.date as string,
+      pallets: order.pallets as number,
+      priority: order.priority as 'high' | 'standard' | undefined,
+      status: order.status as Order['status'],
+      do_number: order.do_number as string | undefined,
+      invoice_number: order.invoice_number as string | undefined,
+      invoice: order.invoice_number as string | undefined,
+      pickup: order.pickup as string | undefined,
+      delivery: order.delivery as string | undefined,
+      ctn_amount: order.ctn_amount as number | undefined,
+      ctn_to_pallet_ratio: order.ctn_to_pallet_ratio as number | undefined,
+      rawData: (order.raw_data || {}) as Record<string, string>,
+      completed_date: order.updated_at as string,
+      assigned_driver_id: (order.assigned_driver_id || undefined) as string | undefined,
+      attachment_urls: (order.attachment_urls || []) as string[],
       receipt_files: [],
     }));
   } catch {
@@ -223,8 +223,8 @@ export function sortCompletedOrders(
   sort: CompletedOrderSort
 ): CompletedOrder[] {
   return [...orders].sort((a, b) => {
-    let aValue: any = a[sort.field];
-    let bValue: any = b[sort.field];
+    let aValue: string | number | Date = a[sort.field] as string | number;
+    let bValue: string | number | Date = b[sort.field] as string | number;
 
     // Handle date fields
     if (sort.field === 'completed_date' || sort.field === 'date') {

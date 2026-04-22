@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
-import { AppConfig, AppCache, LogEntry, Order, Driver, DistributionResult, ZoneWithDistricts, SpecialZone } from '@/types';
+import { AppConfig, AppCache, LogEntry, Order, Driver, DistributionResult, ZoneWithDistricts } from '@/types';
 import * as db from '@/lib/db-supabase';
 import { getZonesWithDistricts, getAllSpecialZones } from '@/lib/db-zones';
 

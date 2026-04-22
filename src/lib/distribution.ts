@@ -69,7 +69,6 @@ function calculateRegionScore(driverRegion: string | undefined, zonePrefix: stri
 function findBestDrivers(
   zone: string,
   driverStates: Map<string, DriverState>,
-  neededCapacity: number
 ): ScoredDriver[] {
   const zonePrefix = getZonePrefix(zone);
   const scoredDrivers: ScoredDriver[] = [];
@@ -192,7 +191,7 @@ export function calculateDistribution(
     const orderPallets = order.calculatedPallets;
 
     // Find drivers with any remaining capacity
-    const candidates = findBestDrivers(order.zone, driverStates, orderPallets);
+    const candidates = findBestDrivers(order.zone, driverStates);
 
     // Find a driver that can fit the FULL order (respecting region score priority)
     const fullFitCandidate = candidates.find(c => c.state.remainingCapacity >= orderPallets);

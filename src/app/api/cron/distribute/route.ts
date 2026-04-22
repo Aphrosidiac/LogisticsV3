@@ -1,11 +1,11 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { calculateDistribution, formatDriverAssignmentMessage, formatDistributionMessage, formatSkippedOrdersMessage, getTomorrowDate } from '@/lib/distribution';
 import { getLocalDate } from '@/lib/utils';
 import { getWhatsAppState, sendWhatsAppMessage } from '@/lib/whatsapp-client';
 import { withInternalAuth } from '@/lib/api-auth';
 import * as db from '@/lib/db-supabase';
 
-export const GET = withInternalAuth(async (request: NextRequest) => {
+export const GET = withInternalAuth(async () => {
     try {
         // 1. Load config
         const config = await db.getConfig();
@@ -59,13 +59,13 @@ export const GET = withInternalAuth(async (request: NextRequest) => {
         let result;
         try {
             result = calculateDistribution(pendingOrders, activeDrivers, tomorrow);
-        } catch (distErr: any) {
+        } catch (distErr: unknown) {
             await db.setLastAutoDistributionDate(today);
             return NextResponse.json({
                 ran: true,
                 targetDate: tomorrow,
                 noOrders: true,
-                message: distErr.message,
+                message: (distErr as Error).message,
             });
         }
 
@@ -214,8 +214,8 @@ export const GET = withInternalAuth(async (request: NextRequest) => {
             whatsapp: waResults,
         });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('[CRON] Auto-distribution failed:', error);
-        return NextResponse.json({ ran: false, error: error.message }, { status: 500 });
+        return NextResponse.json({ ran: false, error: (error as Error).message }, { status: 500 });
     }
 });

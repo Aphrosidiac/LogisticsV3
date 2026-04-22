@@ -63,7 +63,7 @@ export async function sendWhatsAppMessage(
       recipient: data.recipient || recipient,
       error: data.status !== 'success' ? data.message : undefined,
     };
-  } catch (error: any) {
+  } catch {
     return { success: false, recipient, error: 'Worker not running' };
   }
 }
