@@ -131,9 +131,13 @@ export async function deleteAttachment(url: string): Promise<boolean> {
       return false;
     }
 
-    const filePath = pathParts[1];
+    const filePath = decodeURIComponent(pathParts[1]);
 
-    // Delete from Supabase Storage
+    if (filePath.includes('..') || filePath.startsWith('/')) {
+      console.error('Invalid file path');
+      return false;
+    }
+
     const { error } = await supabase.storage
       .from(ORDER_ATTACHMENTS_BUCKET)
       .remove([filePath]);

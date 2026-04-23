@@ -1,10 +1,10 @@
-// Simple session auth — signed cookie, no external JWT library needed
 import { createHmac, timingSafeEqual } from 'crypto';
 import { cookies } from 'next/headers';
 
 const SECRET = process.env.AUTH_SECRET || 'logistics-secret-change-in-production';
 const COOKIE_NAME = 'logistics_session';
 const MAX_AGE = 60 * 60 * 24 * 7; // 7 days
+const MAX_AGE_MS = MAX_AGE * 1000;
 
 export const ADMIN_USER = {
   username: process.env.ADMIN_USERNAME || 'shudalogistics',
@@ -25,8 +25,13 @@ function verify(token: string): string | null {
   try {
     const a = Buffer.from(token);
     const b = Buffer.from(expected);
-    if (a.length !== b.length) return null;
-    if (!timingSafeEqual(a, b)) return null;
+    // Pad to equal length to avoid timing leak on length difference
+    const maxLen = Math.max(a.length, b.length);
+    const aPadded = Buffer.alloc(maxLen, 0);
+    const bPadded = Buffer.alloc(maxLen, 0);
+    a.copy(aPadded);
+    b.copy(bPadded);
+    if (!timingSafeEqual(aPadded, bPadded) || a.length !== b.length) return null;
     return payload;
   } catch {
     return null;
@@ -45,7 +50,10 @@ export async function getSession(): Promise<{ username: string } | null> {
     if (!token) return null;
     const payload = verify(token);
     if (!payload) return null;
-    const [username] = payload.split(':');
+    const parts = payload.split(':');
+    const username = parts[0];
+    const timestamp = parseInt(parts[1], 10);
+    if (isNaN(timestamp) || Date.now() - timestamp > MAX_AGE_MS) return null;
     return { username };
   } catch {
     return null;
@@ -58,7 +66,7 @@ export function getSessionCookieOptions() {
     maxAge: MAX_AGE,
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax' as const,
+    sameSite: 'strict' as const,
     path: '/',
   };
 }

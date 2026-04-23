@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import * as db from '@/lib/db-supabase';
 
 type SendStatus = 'idle' | 'sending' | 'sent' | 'failed';
@@ -30,6 +30,13 @@ export function useWhatsAppSender(
   const [sendStates, setSendStates] = useState<Record<string, DriverSendState>>({});
   const [broadcastStatus, setBroadcastStatus] = useState<SendStatus>('idle');
   const [broadcastError, setBroadcastError] = useState<string | null>(null);
+  const broadcastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (broadcastTimerRef.current) clearTimeout(broadcastTimerRef.current);
+    };
+  }, []);
 
   const checkStatus = useCallback(async () => {
     try {
@@ -117,7 +124,7 @@ export function useWhatsAppSender(
         if (successCount > 0) addLog('success', `Broadcast sent to ${successCount} recipient(s)`);
         if (failCount > 0) addLog('warning', `Failed to send to ${failCount} recipient(s)`);
       }
-      setTimeout(() => setBroadcastStatus('idle'), 4000);
+      broadcastTimerRef.current = setTimeout(() => setBroadcastStatus('idle'), 4000);
     } catch (err: unknown) {
       setBroadcastStatus('failed');
       setBroadcastError((err as Error).message);

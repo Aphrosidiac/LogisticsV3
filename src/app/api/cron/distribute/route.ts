@@ -43,6 +43,9 @@ export const GET = withInternalAuth(async () => {
             return NextResponse.json({ ran: false, reason: 'already ran today', date: today });
         }
 
+        // 3a. Claim today's slot atomically to prevent double-run
+        await db.setLastAutoDistributionDate(today);
+
         // 4. Determine target date (tomorrow)
         const tomorrow = getTomorrowDate();
 
@@ -122,10 +125,7 @@ export const GET = withInternalAuth(async () => {
             await db.updateOrdersToAssigned(orderDriverMap);
         }
 
-        // 9. Mark today as done
-        await db.setLastAutoDistributionDate(today);
-
-        // 10. Send WhatsApp based on autoMessageRecipients setting
+        // 9. Send WhatsApp based on autoMessageRecipients setting
         const recipients = config.autoMessageRecipients || 'drivers';
         const waResults: { recipient: string; success: boolean }[] = [];
         const waState = await getWhatsAppState();

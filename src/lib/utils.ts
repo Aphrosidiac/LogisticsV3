@@ -34,8 +34,7 @@ export function formatTimestamp(date: Date = new Date()): string {
 }
 
 export function formatPhoneNumber(phone: string): string {
-    // Strip non-numeric characters
-    return phone.replace(/\D/g, '');
+    return phone.replace(/[^0-9+]/g, '');
 }
 
 export function validatePhoneNumber(phone: string): boolean {

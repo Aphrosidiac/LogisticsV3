@@ -39,7 +39,19 @@ export default function BackupPage() {
         setIsImporting(true);
         try {
             const text = await file.text();
-            const data = JSON.parse(text);
+            let data;
+            try {
+                data = JSON.parse(text);
+            } catch {
+                addLog('error', 'Import failed', 'Invalid JSON file');
+                return;
+            }
+
+            if (!data || typeof data !== 'object' || (!data.orders && !data.drivers && !data.config)) {
+                addLog('error', 'Import failed', 'File does not appear to be a valid logistics backup (missing orders, drivers, or config)');
+                return;
+            }
+
             await db.importAllData(data);
             addLog('success', 'Data imported successfully');
             window.location.reload();

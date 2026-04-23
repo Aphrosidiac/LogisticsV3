@@ -9,6 +9,9 @@ export const POST = withAuth(async (request: NextRequest) => {
     if (!targetDate) {
       return NextResponse.json({ error: 'targetDate is required' }, { status: 400 });
     }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(targetDate) || isNaN(Date.parse(targetDate))) {
+      return NextResponse.json({ error: 'targetDate must be a valid YYYY-MM-DD date' }, { status: 400 });
+    }
 
     const existing = await db.getDistributionByDate(targetDate);
     if (!existing?.id) {

@@ -26,6 +26,7 @@ const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
 const WORKER_PORT = 3001;
 const CRON_INTERVAL_MS = 60_000;
 const SESSION_PATH = join(process.cwd(), '.wwebjs_auth');
+const MAX_CRON_FAILURES = 10;
 
 // ── WhatsApp State ──────────────────────────────────────────────────────────
 
@@ -150,9 +151,12 @@ function clearReconnectTimer() {
 }
 
 function scheduleReconnect() {
-    // Only auto-reconnect if a session exists on disk
     if (!existsSync(SESSION_PATH)) {
         log('WA', 'No saved session — skipping auto-reconnect (scan QR to connect)');
+        return;
+    }
+    if (wa.isInitializing) {
+        log('WA', 'Already initializing — skipping reconnect schedule');
         return;
     }
     clearReconnectTimer();
@@ -278,19 +282,27 @@ const server = http.createServer(async (req, res) => {
     send(res, 404, { error: 'Not found' });
 });
 
-server.listen(WORKER_PORT, () => {
-    log('HTTP', `Worker API listening on port ${WORKER_PORT}`);
+server.listen(WORKER_PORT, '127.0.0.1', () => {
+    log('HTTP', `Worker API listening on 127.0.0.1:${WORKER_PORT}`);
 });
 
 // ── Cron Loop ────────────────────────────────────────────────────────────────
+
+let cronConsecutiveFailures = 0;
 
 async function runCron() {
     try {
         const res = await fetch(`${BASE_URL}/api/cron/distribute`);
         if (!res.ok) {
-            log('CRON', `HTTP ${res.status} from distribute API`);
+            cronConsecutiveFailures++;
+            log('CRON', `HTTP ${res.status} from distribute API (failures: ${cronConsecutiveFailures}/${MAX_CRON_FAILURES})`);
+            if (cronConsecutiveFailures >= MAX_CRON_FAILURES) {
+                log('CRON', `Pausing cron after ${MAX_CRON_FAILURES} consecutive failures — will retry in 10 min`);
+                setTimeout(() => { cronConsecutiveFailures = 0; log('CRON', 'Resuming cron after cooldown'); }, 10 * 60_000);
+            }
             return;
         }
+        cronConsecutiveFailures = 0;
         const data = await res.json();
         if (data.ran) {
             if (data.noOrders) {
@@ -304,11 +316,19 @@ async function runCron() {
             }
         }
     } catch (err) {
-        log('CRON', `Error: ${err.message}`);
+        cronConsecutiveFailures++;
+        log('CRON', `Error: ${err.message} (failures: ${cronConsecutiveFailures}/${MAX_CRON_FAILURES})`);
+        if (cronConsecutiveFailures >= MAX_CRON_FAILURES) {
+            log('CRON', `Pausing cron after ${MAX_CRON_FAILURES} consecutive failures — will retry in 10 min`);
+            setTimeout(() => { cronConsecutiveFailures = 0; log('CRON', 'Resuming cron after cooldown'); }, 10 * 60_000);
+        }
     }
 }
 
-const cronInterval = setInterval(runCron, CRON_INTERVAL_MS);
+const cronInterval = setInterval(() => {
+    if (cronConsecutiveFailures >= MAX_CRON_FAILURES) return;
+    runCron();
+}, CRON_INTERVAL_MS);
 log('CRON', `Polling ${BASE_URL}/api/cron/distribute every ${CRON_INTERVAL_MS / 1000}s`);
 
 // ── Startup ──────────────────────────────────────────────────────────────────

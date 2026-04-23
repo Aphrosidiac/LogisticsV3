@@ -20,16 +20,18 @@ export function withAuth(handler: RouteHandler): RouteHandler {
 
 /**
  * For internal endpoints called from cron-worker (localhost only).
- * Checks that the request originates from localhost OR has a valid session.
+ * Checks forwarded IP + host header to verify localhost origin, falls back to session auth.
  */
 export function withInternalAuth(handler: RouteHandler): RouteHandler {
   return async (request: NextRequest) => {
     const host = request.headers.get('host') || '';
-    const isLocalhost = host.startsWith('localhost') || host.startsWith('127.0.0.1');
+    const forwarded = request.headers.get('x-forwarded-for') || '';
+    const isLocalhost =
+      (host.startsWith('localhost') || host.startsWith('127.0.0.1')) &&
+      (!forwarded || forwarded === '127.0.0.1' || forwarded === '::1');
     if (isLocalhost) {
       return handler(request);
     }
-    // Fall back to session auth for non-localhost
     const session = await getSession();
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
