@@ -151,15 +151,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
     };
 
-    // Auto-save config changes only (not cache — orders/drivers are managed directly via db-supabase)
-    useEffect(() => {
-        if (!state.isLoading) {
-            db.saveConfig(state.config).catch(err =>
-                console.error('Failed to auto-save config:', err)
-            );
-        }
-    }, [state.config, state.isLoading]);
-
     return (
         <AppContext.Provider value={{ ...state, dispatch, addLog, saveData, saveAdminNumbers }}>
             {children}
