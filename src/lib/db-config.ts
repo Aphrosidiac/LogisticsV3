@@ -3,6 +3,16 @@ import { supabase, TABLES } from './supabase';
 import type { AppConfig } from '@/types';
 import { generateId } from './utils';
 
+async function getConfigId(): Promise<string | null> {
+  const { data } = await supabase
+    .from(TABLES.APP_CONFIG)
+    .select('id')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .single();
+  return data?.id || null;
+}
+
 export async function getConfig(): Promise<AppConfig> {
   try {
     const { data, error } = await supabase
@@ -55,12 +65,7 @@ export async function saveConfig(config: Partial<AppConfig>) {
   try {
     const current = await getConfig();
     const updated = { ...current, ...config };
-
-    const { data: existing } = await supabase
-      .from(TABLES.APP_CONFIG)
-      .select('id')
-      .limit(1)
-      .single();
+    const id = await getConfigId();
 
     const payload = {
       admin_numbers: updated.adminNumbers,
@@ -75,11 +80,11 @@ export async function saveConfig(config: Partial<AppConfig>) {
       distribution_paused: updated.distributionPaused || false,
     };
 
-    if (existing) {
+    if (id) {
       const { error } = await supabase
         .from(TABLES.APP_CONFIG)
         .update(payload)
-        .eq('id', existing.id);
+        .eq('id', id);
       if (error) throw error;
     } else {
       const { error } = await supabase
@@ -119,37 +124,27 @@ export async function getSchema(type: 'orders' | 'drivers') {
 }
 
 export async function setAutoMessageRecipients(value: 'admins' | 'drivers' | 'both'): Promise<void> {
-  const { data: existing } = await supabase
-    .from(TABLES.APP_CONFIG)
-    .select('id')
-    .limit(1)
-    .single();
-
-  if (!existing) throw new Error('No config row found');
+  const id = await getConfigId();
+  if (!id) throw new Error('No config row found');
 
   const { error } = await supabase
     .from(TABLES.APP_CONFIG)
     .update({ auto_message_recipients: value })
-    .eq('id', existing.id);
+    .eq('id', id);
 
   if (error) throw error;
 }
 
 export async function setLastAutoDistributionDate(date: string): Promise<void> {
   try {
-    const { data: existing } = await supabase
-      .from(TABLES.APP_CONFIG)
-      .select('id')
-      .limit(1)
-      .single();
+    const id = await getConfigId();
+    if (!id) return;
 
-    if (existing) {
-      const { error } = await supabase
-        .from(TABLES.APP_CONFIG)
-        .update({ last_auto_distribution_date: date })
-        .eq('id', existing.id);
-      if (error) throw error;
-    }
+    const { error } = await supabase
+      .from(TABLES.APP_CONFIG)
+      .update({ last_auto_distribution_date: date })
+      .eq('id', id);
+    if (error) throw error;
   } catch (error) {
     console.error('Error setting last auto distribution date:', error);
     throw error;
