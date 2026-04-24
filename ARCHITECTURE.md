@@ -6,7 +6,7 @@ This app has two processes that must run together:
 
 | Process | Command | Port | Role |
 |---------|---------|------|------|
-| Next.js app | `npm run dev` | 3000 | UI + API routes |
+| Next.js app | `npm run start` | 3000 | UI + API routes |
 | Cron worker | `node cron-worker.mjs` | 3001 | WhatsApp client + cron scheduler |
 
 **Both must be running.** The Next.js app proxies all WhatsApp operations to the worker.
@@ -17,12 +17,15 @@ This app has two processes that must run together:
 
 The app uses a proxy-based auth system (`src/proxy.ts`) that runs on every request:
 
-- **Token format**: HMAC-SHA256 signed payload stored in `logistics_session` cookie
+- **Token format**: HMAC-SHA256 signed payload (`username:timestamp.signature`) stored in `logistics_session` cookie
+- **Server-side expiry**: Tokens validated against 7-day max age on every request (not just browser cookie expiry)
+- **Timing-safe comparison**: Buffers padded to equal length before `timingSafeEqual` to prevent length-leak attacks
+- **Cookie settings**: `HttpOnly`, `SameSite=Strict`, `Secure` in production
 - **Protected routes**: All routes except `/login`, `/api/auth/*`, `/_next/*`, `/favicon*`, `/logo-*`
-- **Unauthenticated users**: Redirected to `/login`
-- **API auth**: Internal endpoints use `withInternalAuth()` from `src/lib/api-auth.ts`
+- **Internal routes**: `/api/cron/*` and `/api/internal/*` restricted to localhost origin (checked via host + x-forwarded-for)
+- **Rate limiting**: Login endpoint tracks failed attempts per IP — 5 failures triggers 15-minute lockout
 
-The proxy also sets `x-pathname` header so the layout can detect the login page and render it without the sidebar.
+The proxy sets `x-pathname` header so the layout can detect the login page and render it without the sidebar.
 
 ---
 
@@ -36,10 +39,11 @@ The database layer is split into focused modules:
 | `db-drivers.ts` | Driver CRUD, phone updates |
 | `db-config.ts` | App config load/save, distribution date tracking |
 | `db-distributions.ts` | Save/load distribution results |
+| `db-clients.ts` | Client directory CRUD |
 | `db-logs.ts` | Activity log operations |
 | `db-whatsapp.ts` | WhatsApp message log |
 | `db-zones.ts` | Zone and district CRUD |
-| `db-supabase.ts` | Barrel re-export of all modules |
+| `db-supabase.ts` | Barrel re-export of all modules + sheet/backup operations |
 
 All modules import the Supabase client from `supabase.ts`.
 
@@ -49,7 +53,7 @@ All modules import the Supabase client from `supabase.ts`.
 
 | Hook | Purpose |
 |------|---------|
-| `useWhatsAppSender` | Manages WhatsApp connection state, per-recipient send tracking, broadcast |
+| `useWhatsAppSender` | Manages WhatsApp connection state, per-recipient send tracking, broadcast with cleanup |
 | `useMarkDelivered` | Handles marking driver assignments as delivered with loading states |
 | `usePagination` | Generic pagination logic for tables |
 | `useModal` | Modal open/close state management |
@@ -74,10 +78,12 @@ No component files need changes for theme support — all handled via CSS specif
 
 ### What it does
 - Owns the WhatsApp Puppeteer client (persistent — survives Next.js restarts)
-- Exposes an internal HTTP API on **port 3001** for Next.js to call
+- Exposes an internal HTTP API on **127.0.0.1:3001** (localhost only, not accessible from network)
 - Runs the auto-distribution cron loop every 60 seconds
 - Auto-reconnects WhatsApp from saved session on startup
 - Handles exponential backoff reconnect on disconnect (5s → 10s → 20s... max 5 min)
+- Includes reconnect mutex to prevent dual WhatsApp client initialization
+- Pauses cron after 10 consecutive failures (10-minute cooldown, then auto-resumes)
 - Cleans up Chrome processes on graceful shutdown
 
 ### Starting the worker
@@ -86,9 +92,9 @@ No component files need changes for theme support — all handled via CSS specif
 node cron-worker.mjs
 ```
 
-Run this alongside `npm run dev` in a separate terminal. Keep it running permanently in production (use PM2 or similar).
+Run this alongside `npm run dev` in a separate terminal. In production, managed by PM2.
 
-### Worker HTTP API (port 3001 — internal only, not exposed publicly)
+### Worker HTTP API (127.0.0.1:3001 — internal only)
 
 | Method | Path | Description |
 |--------|------|-------------|
@@ -122,7 +128,7 @@ WhatsApp session is saved to `.wwebjs_auth/` in the project root. On worker star
 4. WhatsApp page shows **Connected** immediately
 
 ### If WhatsApp disconnects
-The worker automatically schedules a reconnect with exponential backoff. No manual action needed. The UI will show "Not connected" temporarily and recover on its own.
+The worker automatically schedules a reconnect with exponential backoff (mutex-protected to prevent dual clients). No manual action needed. The UI will show "Not connected" temporarily and recover on its own.
 
 ---
 
@@ -131,37 +137,52 @@ The worker automatically schedules a reconnect with exponential backoff. No manu
 The worker polls `GET /api/cron/distribute` every 60 seconds.
 
 ### What the cron does (in order)
-1. Checks current time against `distributionTime` config (set in Admin Settings)
-2. Checks `lastAutoDistributionDate` — skips if already ran today
-3. Loads all pending orders + active drivers
-4. Loads any pending balances scheduled for tomorrow
-5. Runs distribution algorithm
-6. Saves distribution to DB
-7. Marks assigned orders as `assigned`
-8. Creates pending balances for any partially-fulfilled orders
-9. Marks today as done (`lastAutoDistributionDate = today`)
+1. Checks if distribution is paused → skips if paused
+2. Checks current time against `distributionTime` config (set in Admin Settings)
+3. Checks `lastAutoDistributionDate` — skips if already ran today
+4. **Atomically claims today's date** (prevents race conditions from concurrent calls)
+5. Loads all pending orders + active drivers
+6. Runs distribution algorithm
+7. Merges with existing distribution for the target date if one exists
+8. Saves distribution to DB
+9. Marks assigned orders as `assigned` with driver ID
 10. Sends WhatsApp messages based on `autoMessageRecipients` config:
+    - `'admins'` (default) — full distribution report to all admin numbers
     - `'drivers'` — individual assignments to each driver with a phone number
-    - `'admins'` — full distribution report to all admin numbers
     - `'both'` — both of the above
 
-### Pending Balances
-When an order can't be fully assigned in one distribution (driver capacity exceeded), the remaining pallets become a **pending balance** scheduled for the next day. The next cron run picks these up and includes them in the distribution automatically.
+### Cron failure handling
+If the distribute API fails 10 times consecutively, the cron pauses for 10 minutes then resets the failure counter and resumes polling.
 
 ---
 
-## Next.js API Routes (WhatsApp)
+## API Routes
 
-All WhatsApp routes are thin proxies to the worker. No Puppeteer runs inside Next.js.
+### Auth
+| Route | Method | Auth | Description |
+|-------|--------|------|-------------|
+| `/api/auth/login` | `POST` | Public | Login with rate limiting (5 attempts / 15-min lockout) |
+| `/api/auth/logout` | `GET` | Session | Clear session cookie |
 
-| Route | Method | Proxies to |
-|-------|--------|-----------|
-| `/api/whatsapp/status` | `GET` | `localhost:3001/status` |
-| `/api/whatsapp/init` | `GET` | `localhost:3001/status` (for UI polling) |
-| `/api/whatsapp/init` | `POST` | `localhost:3001/init` |
-| `/api/whatsapp/init` | `DELETE` | `localhost:3001/disconnect` |
-| `/api/whatsapp/send` | `POST` | `localhost:3001/send` |
-| `/api/internal/whatsapp-sync` | `POST` | Called **by** the worker to sync `whatsapp_connected` to DB |
+### WhatsApp (all proxied to worker)
+| Route | Method | Auth | Description |
+|-------|--------|------|-------------|
+| `/api/whatsapp/status` | `GET` | Session | Connection state |
+| `/api/whatsapp/init` | `GET/POST/DELETE` | Session | Poll status / start / disconnect |
+| `/api/whatsapp/send` | `POST` | Session | Send single message (validates phone format + 4096 char limit) |
+| `/api/whatsapp/send` | `PUT` | Session | Batch send (max 50 messages, validates each item) |
+
+### Distribution
+| Route | Method | Auth | Description |
+|-------|--------|------|-------------|
+| `/api/cron/distribute` | `GET` | Localhost | Auto-distribution (called by worker) |
+| `/api/cron/reset-distribution` | `POST` | Localhost | Reset today's distribution flag |
+| `/api/distribution/cancel-redistribute` | `POST` | Session | Cancel + redistribute (validates YYYY-MM-DD date format) |
+
+### Internal
+| Route | Method | Auth | Description |
+|-------|--------|------|-------------|
+| `/api/internal/whatsapp-sync` | `POST` | Localhost | Worker syncs WhatsApp connection state to DB |
 
 ---
 
@@ -172,25 +193,39 @@ NEXT_PUBLIC_SUPABASE_URL=https://<project>.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon-key>
 NEXT_PUBLIC_SITE_URL=http://localhost:3000   # used by worker to call Next.js API
 AUTH_SECRET=your-secret-key                  # HMAC signing key for session tokens
+ADMIN_USERNAME=shudalogistics                # Login username
+ADMIN_EMAIL=admin@example.com               # Alternative login (email)
+ADMIN_PASSWORD_HASH=$2b$10$...              # bcrypt hash of password
 ```
 
 ---
 
-## Production Checklist
+## Deployment
 
-- [ ] Run worker with a process manager (PM2, systemd, etc.) so it restarts on crash
-- [ ] Set `NEXT_PUBLIC_SITE_URL` to your production domain
-- [ ] Set `AUTH_SECRET` to a strong random value
-- [ ] Scan QR once on the production server to save session
-- [ ] Keep `.wwebjs_auth/` persistent across deployments (do not wipe it)
-- [ ] Port 3001 should **not** be exposed publicly — firewall it to localhost only
-- [ ] Set `distributionTime` in Admin Settings to your desired daily run time
-- [ ] Configure `autoMessageRecipients` in Admin Settings (drivers, admins, or both)
+### Production VPS: 43.156.81.159
 
-### PM2 example
 ```bash
-pm2 start cron-worker.mjs --name logistics-worker
-pm2 start npm --name logistics-app -- run start
-pm2 save
-pm2 startup
+ssh ubuntu@43.156.81.159 "cd ~/ShudaLogistics/LogisticsV3 && git pull && npm install && npm run build && pm2 restart logistics && pm2 restart logistics-cron"
 ```
+
+### PM2 processes
+
+| Name | Script | Mode | Port |
+|------|--------|------|------|
+| `logistics` | `npm start` | fork | 3000 |
+| `logistics-cron` | `cron-worker.mjs` | fork | 3001 |
+
+### Production checklist
+
+- [x] Worker HTTP server bound to `127.0.0.1` (not exposed to network)
+- [x] `AUTH_SECRET` set to strong random value
+- [x] Session tokens validated server-side with 7-day expiry
+- [x] Login rate limiting (5 attempts, 15-min lockout per IP)
+- [x] Cron/internal routes restricted to localhost
+- [x] Input validation on all API routes (phone, message length, date format, batch size)
+- [x] Path traversal prevention on storage delete
+- [x] Distribution race condition prevention (atomic date claim)
+- [ ] Scan QR once on the production server to save session
+- [ ] Keep `.wwebjs_auth/` persistent across deployments
+- [ ] Set `distributionTime` in Admin Settings
+- [ ] Configure `autoMessageRecipients` in Admin Settings

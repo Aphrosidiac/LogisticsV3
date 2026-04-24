@@ -6,6 +6,7 @@ A Next.js web application for managing logistics order distribution across drive
 
 - **Order Management** — Create, import, and manage delivery orders with zone/district assignment
 - **Holding Orders** — Stage incomplete orders (no date/zone yet) and release them when ready
+- **Client Directory** — Manage clients with delivery locations, contacts, and attachments
 - **Zone-Based Distribution** — Capacity-constrained priority routing algorithm assigns orders to drivers by region and pallet load
 - **Pending Balances** — Tracks partial fulfillments; rescheduled balances create new high-priority orders for the target date
 - **Auto-Distribution Cron** — Runs once daily at a configurable time; distributes tomorrow's orders and pending balances automatically
@@ -13,12 +14,12 @@ A Next.js web application for managing logistics order distribution across drive
 - **DO File Attachments** — Upload and view delivery order documents (images/PDFs) via Supabase Storage
 - **Google Sheets Import** — Import orders and drivers from public Google Sheets URLs
 - **Dynamic Schema Builder** — Configure custom fields for orders and drivers tables
-- **Zones & Districts** — Hierarchical geographic management with cascade dropdowns
+- **Zones & Districts** — Hierarchical geographic management with cascade dropdowns and special zone schedules
 - **Completed Orders** — Track delivered orders with driver attribution
 - **Activity Logging** — Full audit trail of all actions
-- **Backup & Restore** — Export/import all data
+- **Backup & Restore** — Export/import all data with schema validation
 - **Dark/Light Theme** — Toggle between dark and light mode, persistent per user via localStorage
-- **Authentication** — Cookie-based session auth with HMAC-signed tokens
+- **Authentication** — Cookie-based session auth with HMAC-signed tokens, server-side expiry, and login rate limiting
 
 ## Getting Started
 
@@ -37,13 +38,16 @@ Open [http://localhost:3000](http://localhost:3000)
 
 ## Environment Setup
 
-Create `.env.local` with your Supabase credentials:
+Create `.env.local`:
 
 ```env
 NEXT_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
 AUTH_SECRET=your-secret-key
+ADMIN_USERNAME=shudalogistics
+ADMIN_EMAIL=admin@example.com
+ADMIN_PASSWORD_HASH=$2b$10$...   # bcrypt hash
 ```
 
 Run the SQL schema from `supabase-schema.sql` in the Supabase SQL editor to create all required tables.
@@ -62,26 +66,26 @@ src/
 ├── app/
 │   ├── page.tsx                  # Dashboard
 │   ├── distribution/             # Manual distribution run + driver assignments
-│   ├── balances/                 # Pending balances — reschedule / cancel
 │   ├── sheets-manager/           # DB Manager — Orders, Drivers, and Holding tabs
 │   ├── completed-orders/         # Fulfilled order history
 │   ├── zones/                    # Zone & district management
+│   ├── clients/                  # Client directory with delivery locations
 │   ├── whatsapp/                 # WhatsApp connection & message queue
-│   ├── admin/                    # Admin settings (driver phones, admin numbers, schedule, message recipients)
+│   ├── admin/                    # Admin settings (numbers, schedule, recipients)
 │   ├── login/                    # Authentication page
 │   ├── logs/                     # Activity log viewer
 │   ├── backup/                   # Export / import data
 │   └── api/
 │       ├── auth/                 # Login / logout endpoints
-│       ├── cron/distribute/      # Auto-distribution endpoint (called by cron worker)
+│       ├── cron/                 # Auto-distribution + reset endpoints
+│       ├── distribution/         # Cancel & redistribute endpoint
 │       ├── internal/             # Internal worker sync endpoints
 │       └── whatsapp/             # WhatsApp init / send / status
-├── components/                   # UI: Sidebar, ThemeToggle, Modal, DriverListItem, etc.
+├── components/                   # UI: Sidebar, Modal, DriverListItem, FileUpload, etc.
 ├── context/                      # React Context (app state + dispatch)
-├── hooks/                        # Custom hooks (useWhatsAppSender, useMarkDelivered, usePagination, useModal)
+├── hooks/                        # useWhatsAppSender, useMarkDelivered, usePagination, useModal
 ├── lib/
 │   ├── distribution.ts           # Core distribution algorithm + message formatting
-│   ├── balances.ts               # Pending balance CRUD + reschedule logic
 │   ├── db-supabase.ts            # Barrel re-export of all DB operations
 │   ├── db-orders.ts              # Order CRUD (including holding orders)
 │   ├── db-drivers.ts             # Driver CRUD
@@ -90,15 +94,17 @@ src/
 │   ├── db-logs.ts                # Activity log operations
 │   ├── db-whatsapp.ts            # WhatsApp message log
 │   ├── db-zones.ts               # Zone / district CRUD
+│   ├── db-clients.ts             # Client CRUD
 │   ├── column-defs.ts            # Table column definitions + status styles
 │   ├── supabase.ts               # Supabase client + table name constants
 │   ├── whatsapp-client.ts        # WhatsApp HTTP proxy to cron worker
-│   ├── api-auth.ts               # API route auth middleware (internal + session)
+│   ├── auth.ts                   # Session token signing, verification, expiry
+│   ├── api-auth.ts               # API route auth middleware (session + internal)
 │   ├── storage.ts                # Supabase Storage (DO attachments)
 │   ├── csv.ts                    # CSV / sheet parsing
 │   ├── utils.ts                  # Phone formatting, date display, validation helpers
-│   └── encryption.ts             # Password hashing
-├── proxy.ts                      # Next.js proxy (auth guard + pathname forwarding)
+│   └── encryption.ts             # Client-side AES-GCM encryption
+├── proxy.ts                      # Next.js middleware (auth guard + route protection)
 └── types/
     └── index.ts                  # All TypeScript interfaces
 ```
@@ -112,6 +118,7 @@ src/
 | `pending_balances` | Partial fulfillments awaiting redistribution |
 | `distributions` | Saved distribution run results |
 | `zones` / `districts` | Geographic hierarchy |
+| `clients` | Client directory with delivery locations |
 | `app_config` | Admin settings, schemas, cron schedule, message recipients |
 | `activity_logs` | Audit trail |
 | `sheets` | Imported Google Sheets snapshots |
@@ -131,10 +138,12 @@ src/
 ## Distribution Algorithm
 
 1. Filter orders by target date (default: tomorrow)
-2. Sort by priority (`high` first), then by pallet count (largest first)
-3. Score drivers by region match + remaining capacity
-4. Assign fully if order fits; partially if driver has some space → creates `PendingBalance` for remainder
-5. If no driver capacity → full `PendingBalance` for next day
+2. Sort by priority (`high` first), then FIFO (earliest created first)
+3. Calculate pallets including CTN-to-pallet conversion
+4. Score drivers by region match (exact=10, adjacent=5, other=1) + remaining capacity
+5. Shuffle within score groups for variety
+6. Assign fully if order fits; skip if no driver can fit the full order
+7. Skipped orders remain pending for the next run
 
 ## Holding Orders
 
@@ -146,46 +155,85 @@ Orders can be created in a "holding" state when customers have ordered pallets b
 
 ## WhatsApp Message Recipients
 
-After auto-distribution, WhatsApp messages can be sent to configurable recipients (set in Admin Settings → Distribution Schedule):
+After auto-distribution, WhatsApp messages can be sent to configurable recipients (set in Admin Settings):
 
 | Setting | Behavior |
 |---|---|
 | **Drivers only** | Each driver with a phone number receives their individual assignment |
-| **Admins only** | All configured admin numbers receive the full distribution report |
+| **Admins only** | All configured admin numbers receive the full distribution report (default) |
 | **Both** | Drivers get individual assignments + admins get the full report |
 
-Manual sending is also available: the Distribution page has "Send via WhatsApp" for admins, and the Admin Settings page has per-driver send + "Send All" buttons.
+Recipient selection auto-saves on change. Manual sending is also available via the Distribution page and Admin Settings.
 
 ## Pending Balance Lifecycle
 
 ```
 Distribution run
-  └─► PendingBalance created (status: pending, scheduled_for_date: targetDate + 1)
+  └─► Order can't fit any driver (skipped)
           │
           ├─ Next cron / manual run
-          │    └─► convertBalancesToOrders() → re-enters distribution as high-priority
+          │    └─► Remains pending, picked up again
           │
           ├─ Manual Cancel
-          │    └─► status: cancelled (removed from list)
+          │    └─► status: cancelled
           │
           └─ Manual Reschedule
-               └─► balance cancelled + new Order created for remaining_quantity
-                   on chosen date with priority: high → picked up by distribution
+               └─► New order created for remaining quantity
+                   on chosen date with priority: high
 ```
 
 ## Cron Worker
 
 `cron-worker.mjs` runs as a separate Node process that:
 - Owns the WhatsApp Puppeteer client (persistent session)
-- Exposes an internal HTTP API on port 3001
+- Exposes an internal HTTP API on `127.0.0.1:3001` (localhost only)
 - Polls `/api/cron/distribute` every 60 seconds
-- Auto-reconnects WhatsApp with exponential backoff
+- Auto-reconnects WhatsApp with exponential backoff (5s → 5min max)
+- Pauses cron after 10 consecutive failures (10-min cooldown, then resumes)
+- Includes reconnect mutex to prevent dual WhatsApp client initialization
 
-The distribution time is configurable in Admin Settings (default `20:00`). The cron runs once per day — subsequent calls on the same day are no-ops.
+The distribution time is configurable in Admin Settings (default `20:00`). The cron runs once per day — subsequent calls on the same day are no-ops (atomic date claim prevents race conditions).
 
-## Authentication
+## Authentication & Security
 
 The app uses cookie-based session authentication:
 - HMAC-SHA256 signed tokens stored in `logistics_session` cookie
+- Server-side token expiry validation (7 days)
+- Timing-safe comparison with padding to prevent length-leak attacks
+- `SameSite=Strict` cookies
+- Login rate limiting: 5 failed attempts per IP triggers 15-minute lockout
 - `proxy.ts` guards all routes except `/login`, `/api/auth/*`, and public assets
-- Login credentials are configured via the admin settings page
+- `/api/cron/*` and `/api/internal/*` restricted to localhost origin only
+- API input validation: phone format, message length (4096 char limit), date format, batch size caps
+- Storage path traversal prevention on file delete
+- Backup import schema validation
+
+## Deployment
+
+### Production (VPS at 43.156.81.159)
+
+```bash
+ssh ubuntu@43.156.81.159 "cd ~/ShudaLogistics/LogisticsV3 && git pull && npm install && npm run build && pm2 restart logistics && pm2 restart logistics-cron"
+```
+
+### PM2 Setup
+
+```bash
+pm2 start npm --name logistics -- start
+pm2 start cron-worker.mjs --name logistics-cron
+pm2 save
+pm2 startup
+```
+
+### Production Checklist
+
+- [x] Worker bound to localhost only (port 3001 not exposed)
+- [x] `AUTH_SECRET` set to a strong random value
+- [x] Session tokens expire server-side after 7 days
+- [x] Login rate limiting enabled
+- [x] Cron/internal routes blocked from non-localhost
+- [x] Input validation on all API routes
+- [ ] Scan QR once on the production server to save WhatsApp session
+- [ ] Keep `.wwebjs_auth/` persistent across deployments
+- [ ] Set `distributionTime` in Admin Settings
+- [ ] Configure `autoMessageRecipients` in Admin Settings
