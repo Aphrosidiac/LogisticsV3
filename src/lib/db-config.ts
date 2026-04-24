@@ -118,6 +118,23 @@ export async function getSchema(type: 'orders' | 'drivers') {
   }
 }
 
+export async function setAutoMessageRecipients(value: 'admins' | 'drivers' | 'both'): Promise<void> {
+  const { data: existing } = await supabase
+    .from(TABLES.APP_CONFIG)
+    .select('id')
+    .limit(1)
+    .single();
+
+  if (!existing) throw new Error('No config row found');
+
+  const { error } = await supabase
+    .from(TABLES.APP_CONFIG)
+    .update({ auto_message_recipients: value })
+    .eq('id', existing.id);
+
+  if (error) throw error;
+}
+
 export async function setLastAutoDistributionDate(date: string): Promise<void> {
   try {
     const { data: existing } = await supabase

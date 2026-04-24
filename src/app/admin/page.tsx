@@ -41,6 +41,12 @@ export default function AdminPage() {
     const [isSavingSchedule, setIsSavingSchedule] = useState(false);
     const [scheduleSaved, setScheduleSaved] = useState(false);
 
+    // Recipients save state
+    const [isSavingRecipients, setIsSavingRecipients] = useState(false);
+    const [recipientsSaved, setRecipientsSaved] = useState(false);
+    const [recipientsError, setRecipientsError] = useState<string | null>(null);
+    const recipientsDirty = autoRecipients !== (config.autoMessageRecipients || 'admins');
+
     // Distribution pause toggle
     const [isTogglingPause, setIsTogglingPause] = useState(false);
 
@@ -125,12 +131,31 @@ export default function AdminPage() {
         }
     }
 
+    // ── Save recipients ───────────────────────────────────────────────────
+
+    async function saveRecipients() {
+        setIsSavingRecipients(true);
+        setRecipientsError(null);
+        try {
+            await db.setAutoMessageRecipients(autoRecipients);
+            dispatch({ type: 'SET_CONFIG', payload: { ...config, autoMessageRecipients: autoRecipients } });
+            setRecipientsSaved(true);
+            addLog('info', `WhatsApp recipients set to: ${autoRecipients}`);
+            setTimeout(() => setRecipientsSaved(false), 3000);
+        } catch (err: unknown) {
+            setRecipientsError((err as Error).message);
+            addLog('error', 'Failed to save recipients', (err as Error).message);
+        } finally {
+            setIsSavingRecipients(false);
+        }
+    }
+
     // ── Distribution schedule ────────────────────────────────────────────────
 
     async function saveSchedule() {
         setIsSavingSchedule(true);
         try {
-            const updatedConfig = { ...config, distributionTime, autoMessageRecipients: autoRecipients };
+            const updatedConfig = { ...config, distributionTime };
             await db.saveConfig(updatedConfig);
             dispatch({ type: 'SET_CONFIG', payload: updatedConfig });
             setScheduleSaved(true);
@@ -340,7 +365,7 @@ export default function AdminPage() {
                     </button>
                 </div>
 
-                <div className="space-y-2 pt-2 border-t border-zinc-800">
+                <div className="space-y-3 pt-2 border-t border-zinc-800">
                     <p className="text-sm text-zinc-400 font-medium">After auto-distribution, send WhatsApp to:</p>
                     <div className="flex flex-wrap gap-4">
                         {([
@@ -361,13 +386,10 @@ export default function AdminPage() {
                                     name="autoRecipients"
                                     value={option.value}
                                     checked={autoRecipients === option.value}
-                                    onChange={async () => {
+                                    onChange={() => {
                                         setAutoRecipients(option.value);
-                                        try {
-                                            const updatedConfig = { ...config, autoMessageRecipients: option.value };
-                                            await db.saveConfig(updatedConfig);
-                                            dispatch({ type: 'SET_CONFIG', payload: updatedConfig });
-                                        } catch { /* save failed silently — will retry on next Save click */ }
+                                        setRecipientsSaved(false);
+                                        setRecipientsError(null);
                                     }}
                                     className="mt-0.5 accent-emerald-500"
                                 />
@@ -379,6 +401,25 @@ export default function AdminPage() {
                                 </div>
                             </label>
                         ))}
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <button
+                            onClick={saveRecipients}
+                            disabled={isSavingRecipients || (!recipientsDirty && !recipientsSaved)}
+                            className="btn-primary flex items-center gap-2 text-sm"
+                        >
+                            {isSavingRecipients
+                                ? <Loader className="w-4 h-4 animate-spin" />
+                                : <Check className="w-4 h-4" />
+                            }
+                            {recipientsSaved ? 'Saved!' : 'Save Recipients'}
+                        </button>
+                        {recipientsError && (
+                            <span className="text-sm text-rose-400 flex items-center gap-1">
+                                <AlertCircle className="w-4 h-4" />
+                                Failed to save — {recipientsError}
+                            </span>
+                        )}
                     </div>
                 </div>
 
