@@ -26,7 +26,7 @@ import {
 } from 'lucide-react';
 
 export default function AdminPage() {
-    const { config, cache, dispatch, addLog, saveAdminNumbers } = useApp();
+    const { config, cache, dispatch, addLog, saveAdminNumbers, isLoading } = useApp();
 
     // WhatsApp sender hook
     const wa = useWhatsAppSender(addLog);
@@ -367,60 +367,68 @@ export default function AdminPage() {
 
                 <div className="space-y-3 pt-2 border-t border-zinc-800">
                     <p className="text-sm text-zinc-400 font-medium">After auto-distribution, send WhatsApp to:</p>
-                    <div className="flex flex-wrap gap-4">
-                        {([
-                            { value: 'drivers' as const, label: 'Drivers only', desc: 'Each driver gets their assignment' },
-                            { value: 'admins' as const, label: 'Admins only', desc: 'Admins get the full report' },
-                            { value: 'both' as const, label: 'Both', desc: 'Drivers + admins' },
-                        ]).map(option => (
-                            <label
-                                key={option.value}
-                                className={`flex items-start gap-3 px-4 py-3 rounded-xl border cursor-pointer transition-colors ${
-                                    autoRecipients === option.value
-                                        ? 'bg-emerald-500/10 border-emerald-500/30'
-                                        : 'bg-zinc-800/50 border-zinc-700 hover:border-zinc-600'
-                                }`}
-                            >
-                                <input
-                                    type="radio"
-                                    name="autoRecipients"
-                                    value={option.value}
-                                    checked={autoRecipients === option.value}
-                                    onChange={() => {
-                                        setAutoRecipients(option.value);
-                                        setRecipientsSaved(false);
-                                        setRecipientsError(null);
-                                    }}
-                                    className="mt-0.5 accent-emerald-500"
-                                />
-                                <div>
-                                    <p className={`text-sm font-medium ${autoRecipients === option.value ? 'text-emerald-400' : 'text-zinc-300'}`}>
-                                        {option.label}
-                                    </p>
-                                    <p className="text-xs text-zinc-500">{option.desc}</p>
-                                </div>
-                            </label>
-                        ))}
-                    </div>
-                    <div className="flex items-center gap-3">
-                        <button
-                            onClick={saveRecipients}
-                            disabled={isSavingRecipients || (!recipientsDirty && !recipientsSaved)}
-                            className="btn-primary flex items-center gap-2 text-sm"
-                        >
-                            {isSavingRecipients
-                                ? <Loader className="w-4 h-4 animate-spin" />
-                                : <Check className="w-4 h-4" />
-                            }
-                            {recipientsSaved ? 'Saved!' : 'Save Recipients'}
-                        </button>
-                        {recipientsError && (
-                            <span className="text-sm text-rose-400 flex items-center gap-1">
-                                <AlertCircle className="w-4 h-4" />
-                                Failed to save — {recipientsError}
-                            </span>
-                        )}
-                    </div>
+                    {isLoading ? (
+                        <div className="flex items-center gap-2 text-zinc-500 text-sm py-3">
+                            <Loader className="w-4 h-4 animate-spin" /> Loading...
+                        </div>
+                    ) : (
+                        <>
+                            <div className="flex flex-wrap gap-4">
+                                {([
+                                    { value: 'drivers' as const, label: 'Drivers only', desc: 'Each driver gets their assignment' },
+                                    { value: 'admins' as const, label: 'Admins only', desc: 'Admins get the full report' },
+                                    { value: 'both' as const, label: 'Both', desc: 'Drivers + admins' },
+                                ]).map(option => (
+                                    <label
+                                        key={option.value}
+                                        className={`flex items-start gap-3 px-4 py-3 rounded-xl border cursor-pointer transition-colors ${
+                                            autoRecipients === option.value
+                                                ? 'bg-emerald-500/10 border-emerald-500/30'
+                                                : 'bg-zinc-800/50 border-zinc-700 hover:border-zinc-600'
+                                        }`}
+                                    >
+                                        <input
+                                            type="radio"
+                                            name="autoRecipients"
+                                            value={option.value}
+                                            checked={autoRecipients === option.value}
+                                            onChange={() => {
+                                                setAutoRecipients(option.value);
+                                                setRecipientsSaved(false);
+                                                setRecipientsError(null);
+                                            }}
+                                            className="mt-0.5 accent-emerald-500"
+                                        />
+                                        <div>
+                                            <p className={`text-sm font-medium ${autoRecipients === option.value ? 'text-emerald-400' : 'text-zinc-300'}`}>
+                                                {option.label}
+                                            </p>
+                                            <p className="text-xs text-zinc-500">{option.desc}</p>
+                                        </div>
+                                    </label>
+                                ))}
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <button
+                                    onClick={saveRecipients}
+                                    disabled={isSavingRecipients || (!recipientsDirty && !recipientsSaved)}
+                                    className="btn-primary flex items-center gap-2 text-sm"
+                                >
+                                    {isSavingRecipients
+                                        ? <Loader className="w-4 h-4 animate-spin" />
+                                        : <Check className="w-4 h-4" />
+                                    }
+                                    {recipientsSaved ? 'Saved!' : 'Save Recipients'}
+                                </button>
+                                {recipientsError && (
+                                    <span className="text-sm text-rose-400 flex items-center gap-1">
+                                        <AlertCircle className="w-4 h-4" />
+                                        Failed to save — {recipientsError}
+                                    </span>
+                                )}
+                            </div>
+                        </>
+                    )}
                 </div>
 
                 <p className="text-sm text-zinc-500">
