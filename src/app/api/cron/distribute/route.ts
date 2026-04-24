@@ -126,7 +126,7 @@ export const GET = withInternalAuth(async () => {
         }
 
         // 9. Send WhatsApp based on autoMessageRecipients setting
-        const recipients = config.autoMessageRecipients || 'drivers';
+        const recipients = config.autoMessageRecipients || 'admins';
         const waResults: { recipient: string; success: boolean }[] = [];
         const waState = await getWhatsAppState();
 

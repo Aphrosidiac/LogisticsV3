@@ -37,7 +37,7 @@ export default function AdminPage() {
 
     // Distribution schedule
     const [distributionTime, setDistributionTime] = useState(config.distributionTime || '20:00');
-    const [autoRecipients, setAutoRecipients] = useState<'admins' | 'drivers' | 'both'>(config.autoMessageRecipients || 'drivers');
+    const [autoRecipients, setAutoRecipients] = useState<'admins' | 'drivers' | 'both'>(config.autoMessageRecipients || 'admins');
     const [isSavingSchedule, setIsSavingSchedule] = useState(false);
     const [scheduleSaved, setScheduleSaved] = useState(false);
 
@@ -361,7 +361,14 @@ export default function AdminPage() {
                                     name="autoRecipients"
                                     value={option.value}
                                     checked={autoRecipients === option.value}
-                                    onChange={() => setAutoRecipients(option.value)}
+                                    onChange={async () => {
+                                        setAutoRecipients(option.value);
+                                        try {
+                                            const updatedConfig = { ...config, autoMessageRecipients: option.value };
+                                            await db.saveConfig(updatedConfig);
+                                            dispatch({ type: 'SET_CONFIG', payload: updatedConfig });
+                                        } catch { /* save failed silently — will retry on next Save click */ }
+                                    }}
                                     className="mt-0.5 accent-emerald-500"
                                 />
                                 <div>

@@ -319,7 +319,7 @@ export default function DistributionPage() {
     const handleSendWhatsApp = async () => {
         if (!distribution) return;
 
-        const recipients = config.autoMessageRecipients || 'drivers';
+        const recipients = config.autoMessageRecipients || 'admins';
         const sendToDrivers = recipients === 'drivers' || recipients === 'both';
         const sendToAdmins = recipients === 'admins' || recipients === 'both';
 

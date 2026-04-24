@@ -42,7 +42,7 @@ export async function getConfig(): Promise<AppConfig> {
       schemas: data.schemas || {},
       distributionTime: data.distribution_time || '20:00',
       lastAutoDistributionDate: data.last_auto_distribution_date || undefined,
-      autoMessageRecipients: data.auto_message_recipients || 'drivers',
+      autoMessageRecipients: data.auto_message_recipients || 'admins',
       distributionPaused: data.distribution_paused || false,
     };
   } catch (error) {
@@ -71,7 +71,7 @@ export async function saveConfig(config: Partial<AppConfig>) {
       schemas: updated.schemas,
       distribution_time: updated.distributionTime || '20:00',
       last_auto_distribution_date: updated.lastAutoDistributionDate || null,
-      auto_message_recipients: updated.autoMessageRecipients || 'drivers',
+      auto_message_recipients: updated.autoMessageRecipients || 'admins',
       distribution_paused: updated.distributionPaused || false,
     };
 
