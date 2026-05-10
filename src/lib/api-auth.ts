@@ -25,10 +25,11 @@ export function withAuth(handler: RouteHandler): RouteHandler {
 export function withInternalAuth(handler: RouteHandler): RouteHandler {
   return async (request: NextRequest) => {
     const host = request.headers.get('host') || '';
-    const forwarded = request.headers.get('x-forwarded-for') || '';
+    const forwarded = (request.headers.get('x-forwarded-for') || '').split(',')[0].trim();
+    const localAddresses = ['', '127.0.0.1', '::1', '::ffff:127.0.0.1'];
     const isLocalhost =
       (host.startsWith('localhost') || host.startsWith('127.0.0.1')) &&
-      (!forwarded || forwarded === '127.0.0.1' || forwarded === '::1');
+      localAddresses.includes(forwarded);
     if (isLocalhost) {
       return handler(request);
     }
