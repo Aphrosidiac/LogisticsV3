@@ -69,6 +69,7 @@ export const ORDER_COLS: ColDef[] = [
         options: [
             { value: 'pending', label: 'Pending' },
             { value: 'assigned', label: 'Assigned' },
+            { value: 'picked_up', label: 'Picked Up' },
             { value: 'completed', label: 'Completed' },
         ],
     },
@@ -109,6 +110,7 @@ export const PRIORITY_STYLE: Record<string, string> = {
 export const STATUS_STYLE: Record<string, string> = {
     pending:     'bg-amber-500/10 text-amber-400 border border-amber-500/25',
     assigned:    'bg-blue-500/10 text-blue-300 border border-blue-500/25',
+    picked_up:   'bg-cyan-500/10 text-cyan-400 border border-cyan-500/25',
     in_progress: 'bg-purple-500/10 text-purple-400 border border-purple-500/25',
     completed:   'bg-emerald-500/10 text-emerald-400 border border-emerald-500/25',
     cancelled:   'bg-zinc-700/40 text-zinc-500 border border-zinc-700/60',
@@ -117,6 +119,7 @@ export const STATUS_STYLE: Record<string, string> = {
 export const STATUS_ROW_ACCENT: Record<string, string> = {
     pending:     'border-l-[3px] border-l-amber-500/50',
     assigned:    'border-l-[3px] border-l-blue-500/50',
+    picked_up:   'border-l-[3px] border-l-cyan-500/50',
     in_progress: 'border-l-[3px] border-l-purple-500/50',
     completed:   'border-l-[3px] border-l-emerald-500/50',
     cancelled:   'border-l-[3px] border-l-zinc-600/40',

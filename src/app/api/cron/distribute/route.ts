@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { calculateDistribution, formatDriverAssignmentMessage, formatDistributionMessage, formatSkippedOrdersMessage, getTomorrowDate } from '@/lib/distribution';
+import { calculateDistribution, formatDriverAssignmentMessage, formatDriverPickupList, formatDistributionMessage, formatSkippedOrdersMessage, getTomorrowDate } from '@/lib/distribution';
 import { getLocalDate } from '@/lib/utils';
 import { getWhatsAppState, sendWhatsAppMessage } from '@/lib/whatsapp-client';
 import { withInternalAuth } from '@/lib/api-auth';
@@ -141,12 +141,20 @@ export const GET = withInternalAuth(async () => {
                     const batchResults = await Promise.all(
                         batch.map(async (assignment) => {
                             try {
+                                // Send pickup list first (simple numbered route)
+                                const pickupList = formatDriverPickupList(assignment);
+                                const pickupRes = await sendWhatsAppMessage(assignment.driver.phone!, pickupList);
+                                if (pickupRes.success) {
+                                    await db.addWhatsAppMessage(assignment.driver.phone!, pickupList, distributionId);
+                                }
+                                // Then send detailed assignment
+                                await new Promise(r => setTimeout(r, 300));
                                 const message = formatDriverAssignmentMessage(assignment);
                                 const res = await sendWhatsAppMessage(assignment.driver.phone!, message);
                                 if (res.success) {
                                     await db.addWhatsAppMessage(assignment.driver.phone!, message, distributionId);
                                 }
-                                return { recipient: `driver:${assignment.driver.name}`, success: res.success };
+                                return { recipient: `driver:${assignment.driver.name}`, success: res.success && pickupRes.success };
                             } catch {
                                 return { recipient: `driver:${assignment.driver.name}`, success: false };
                             }

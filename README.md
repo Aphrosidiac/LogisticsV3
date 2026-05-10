@@ -7,15 +7,20 @@ A Next.js web application for managing logistics order distribution across drive
 - **Order Management** — Create, import, and manage delivery orders with zone/district assignment
 - **Holding Orders** — Stage incomplete orders (no date/zone yet) and release them when ready
 - **Client Directory** — Manage clients with delivery locations, contacts, and attachments
+- **Delivery Autofill** — Delivery company selector auto-populates address, postcode, area, state, and contact from client directory (same pattern as pickup)
+- **Measurement Units** — Quantity field supports CTN, Roll, Ft, and Others — dynamically labeled in the form and WhatsApp messages
 - **Zone-Based Distribution** — Capacity-constrained priority routing algorithm assigns orders to drivers by region and pallet load
 - **Pending Balances** — Tracks partial fulfillments; rescheduled balances create new high-priority orders for the target date
 - **Auto-Distribution Cron** — Runs once daily at a configurable time; distributes tomorrow's orders and pending balances automatically
 - **WhatsApp Messaging** — Sends individual assignments to drivers and/or full reports to admins via WhatsApp Web.js, with configurable recipients (drivers only, admins only, or both)
+- **Driver Pickup List** — Drivers receive a simplified numbered pickup route via WhatsApp (company name, pallet count, priority/oversized flags) alongside the detailed assignment
+- **Pickup Verification** — After pickup, admin marks each DO as collected or not; generates a WhatsApp checklist with checkmarks/crosses per DO number
+- **Delivery Confirmation (POD)** — Upload proof-of-delivery photos per order; photos stored in Supabase Storage and shown in completed orders
 - **DO File Attachments** — Upload and view delivery order documents (images/PDFs) via Supabase Storage
 - **Google Sheets Import** — Import orders and drivers from public Google Sheets URLs
 - **Dynamic Schema Builder** — Configure custom fields for orders and drivers tables
 - **Zones & Districts** — Hierarchical geographic management with cascade dropdowns and special zone schedules
-- **Completed Orders** — Track delivered orders with driver attribution
+- **Completed Orders** — Track delivered orders with driver attribution and POD photos
 - **Activity Logging** — Full audit trail of all actions
 - **Backup & Restore** — Export/import all data with schema validation
 - **Dark/Light Theme** — Toggle between dark and light mode, persistent per user via localStorage
@@ -67,7 +72,9 @@ src/
 │   ├── page.tsx                  # Dashboard
 │   ├── distribution/             # Manual distribution run + driver assignments
 │   ├── sheets-manager/           # DB Manager — Orders, Drivers, and Holding tabs
-│   ├── completed-orders/         # Fulfilled order history
+│   ├── pickup-verification/      # Mark DOs as collected after driver pickup
+│   ├── delivery-confirmation/    # Upload proof-of-delivery photos
+│   ├── completed-orders/         # Fulfilled order history with POD
 │   ├── zones/                    # Zone & district management
 │   ├── clients/                  # Client directory with delivery locations
 │   ├── whatsapp/                 # WhatsApp connection & message queue
@@ -113,7 +120,7 @@ src/
 
 | Table | Purpose |
 |---|---|
-| `orders` | Delivery orders (zone, pallets, date, status, driver assignment, attachments) |
+| `orders` | Delivery orders (zone, pallets, date, status, driver assignment, measurement unit, oversized flag, pickup verification, delivery photos) |
 | `drivers` | Drivers (name, identifier, capacity, region, phone) |
 | `pending_balances` | Partial fulfillments awaiting redistribution |
 | `distributions` | Saved distribution run results |
@@ -131,19 +138,21 @@ src/
 | `pending` | Awaiting distribution |
 | `holding` | Staged — missing date/zone, not yet ready for distribution |
 | `assigned` | Assigned to a driver via distribution |
+| `picked_up` | Driver has collected the order (verified via Pickup Verification page) |
 | `in_progress` | Being delivered |
-| `completed` | Delivered successfully |
+| `completed` | Delivered successfully (may include POD photos) |
 | `cancelled` | Cancelled |
 
 ## Distribution Algorithm
 
 1. Filter orders by target date (default: tomorrow)
 2. Sort by priority (`high` first), then FIFO (earliest created first)
-3. Calculate pallets including CTN-to-pallet conversion
-4. Score drivers by region match (exact=10, adjacent=5, other=1) + remaining capacity
-5. Shuffle within score groups for variety
-6. Assign fully if order fits; skip if no driver can fit the full order
-7. Skipped orders remain pending for the next run
+3. Calculate pallets including quantity-to-pallet conversion (supports CTN, Roll, Ft, Others)
+4. Group by zone, randomize zone processing order for fairness
+5. Zone affinity: prefer drivers already serving the same zone
+6. Fall back to any driver with remaining capacity
+7. Assign fully if order fits; skip if no driver can fit the full order
+8. Skipped orders remain pending for the next run
 
 ## Holding Orders
 
@@ -159,9 +168,37 @@ After auto-distribution, WhatsApp messages can be sent to configurable recipient
 
 | Setting | Behavior |
 |---|---|
-| **Drivers only** | Each driver with a phone number receives their individual assignment |
+| **Drivers only** | Each driver receives a simplified pickup route list + detailed assignment |
 | **Admins only** | All configured admin numbers receive the full distribution report (default) |
-| **Both** | Drivers get individual assignments + admins get the full report |
+| **Both** | Drivers get pickup list + assignment; admins get the full report |
+
+### Driver Pickup List Format
+
+Drivers receive a simplified numbered pickup route matching operational workflow:
+
+```
+☀️☀️☀️☀️☀️☀️☀️☀️☀️
+Ambil barang kl
+1)securepac 1p
+2)crafted 1p
+3)pp stell 1p panjang🚨🚨🚨
+4)sun paper 130ctn(4-5)p🚨🚨🚨
+```
+
+- `Xp` = X pallets, `Xctn(Y)p` = X cartons (Y pallets equivalent)
+- `panjang` = oversized item flag
+- `🚨🚨🚨` = high priority order
+
+### Pickup Verification Message
+
+After admin verifies pickup, a collection checklist is sent:
+
+```
+COLLECT BY SHUDA
+COLLECT DATE : 2026-05-07
+1) VINYL FLOORING (54952✅, 55240✅) 1 pallet + 1 pallet
+2) JM CONCEPTUAL (55093✅, 55391❌) 1 pallet + 1 pallet
+```
 
 Recipient selection auto-saves on change. Manual sending is also available via the Distribution page and Admin Settings.
 
@@ -237,3 +274,4 @@ pm2 startup
 - [ ] Keep `.wwebjs_auth/` persistent across deployments
 - [ ] Set `distributionTime` in Admin Settings
 - [ ] Configure `autoMessageRecipients` in Admin Settings
+- [ ] Run `supabase/migrations/20260507_features_update.sql` in Supabase SQL Editor

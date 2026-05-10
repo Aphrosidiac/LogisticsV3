@@ -3,7 +3,7 @@
 //   db-config.ts, db-orders.ts, db-drivers.ts, db-distributions.ts, db-logs.ts, db-whatsapp.ts
 
 export { getConfig, saveConfig, saveSchema, getSchema, setLastAutoDistributionDate, setAutoMessageRecipients } from './db-config';
-export { saveOrders, getAllOrders, clearOrders, addOrder, updateOrder, deleteOrder, updateOrdersToAssigned, revertOrdersToPending, getPendingOrderCountForDate, markOrdersAsCompleted } from './db-orders';
+export { saveOrders, getAllOrders, clearOrders, addOrder, updateOrder, deleteOrder, updateOrdersToAssigned, revertOrdersToPending, getPendingOrderCountForDate, markOrdersAsCompleted, markOrdersAsPickedUp, markOrdersAsNotCollected, getAssignedOrdersForDate, getOrdersForDeliveryPage, updateDeliveryPhotos, markOrderAsDelivered } from './db-orders';
 export { getAllClients, addClient, updateClient, deleteClient, clearClients } from './db-clients';
 export { saveDrivers, getAllDrivers, addDriver, updateDriver, deleteDriver, setDriverActive, getActiveDrivers, clearDrivers } from './db-drivers';
 export { saveDistribution, getAllDistributions, getDistribution, getLatestDistribution, getDistributionByDate, deleteDistribution, updateDistribution, updateDistributionAssignments } from './db-distributions';

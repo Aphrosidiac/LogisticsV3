@@ -341,6 +341,7 @@ export default function CompletedOrdersPage() {
                 <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">Driver</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">Status</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">DO Document</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">POD</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-700">
@@ -422,6 +423,19 @@ export default function CompletedOrdersPage() {
                         >
                           <Download className="w-3.5 h-3.5" />
                         </a>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-zinc-600 italic">—</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-4">
+                    {order.delivery_photo_urls && order.delivery_photo_urls.length > 0 ? (
+                      <div className="flex gap-1">
+                        {order.delivery_photo_urls.map((url, i) => (
+                          <a key={i} href={url} target="_blank" rel="noopener noreferrer">
+                            <img src={url} alt={`POD ${i + 1}`} className="w-10 h-10 rounded object-cover border border-zinc-700 hover:border-emerald-500/50 transition-colors" />
+                          </a>
+                        ))}
                       </div>
                     ) : (
                       <span className="text-xs text-zinc-600 italic">—</span>

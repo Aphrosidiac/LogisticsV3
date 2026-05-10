@@ -102,18 +102,26 @@ export function sheetDataToOrders(data: Record<string, unknown>[]): Order[] {
 
         // Extract other fields using exact schema field names
         const pallets = Number(row['Quantity'] || row['QUANTITY'] || row['Pallets'] || row['PALLETS'] || 1);
+        const palletsMaxRaw = row['Pallets Max'] || row['PALLETS MAX'] || row['Max Pallets'] || row['MAX PALLETS'] || '';
+        const palletsMax = palletsMaxRaw ? Number(palletsMaxRaw) : undefined;
         const date = String(row['Delivery Date'] || row['DELIVERY DATE'] || row['Date'] || row['DATE'] || new Date().toISOString().split('T')[0]);
         const priority = String(row['Priority'] || row['PRIORITY'] || 'standard').toLowerCase();
         const pickup = String(row['Pickup'] || row['PICKUP'] || '');
         const delivery = String(row['Delivery'] || row['DELIVERY'] || '');
         const invoice = String(row['Invoice'] || row['INVOICE'] || row['Invoice Number'] || row['INVOICE NUMBER'] || '');
+        const measurementUnit = String(row['Unit'] || row['UNIT'] || row['Measurement Unit'] || row['MEASUREMENT UNIT'] || 'CTN');
+        const oversizedRaw = String(row['Oversized'] || row['OVERSIZED'] || row['Panjang'] || row['PANJANG'] || '').toLowerCase();
+        const isOversized = oversizedRaw === 'true' || oversizedRaw === 'yes' || oversizedRaw === '1';
 
         orders.push({
             id: generateId(),
             pallets,
+            pallets_max: palletsMax,
             zone: zone.toUpperCase(),
             date,
             priority: priority as 'high' | 'standard',
+            measurement_unit: measurementUnit as Order['measurement_unit'],
+            is_oversized: isOversized,
             pickup: pickup || undefined,
             delivery: delivery || undefined,
             invoice: invoice || undefined,
@@ -185,14 +193,17 @@ export function sheetDataToDrivers(data: Record<string, unknown>[]): Driver[] {
 export function ordersToCSV(orders: Order[]): string {
     if (orders.length === 0) return '';
 
-    const headers = ['Zone', 'Pallets', 'Date', 'Pickup', 'Delivery', 'Invoice'];
+    const headers = ['Zone', 'Pallets', 'Pallets Max', 'Date', 'Pickup', 'Delivery', 'Invoice', 'Unit', 'Oversized'];
     const rows = orders.map(order => ({
         Zone: order.zone,
         Pallets: order.pallets,
+        'Pallets Max': order.pallets_max || '',
         Date: order.date || '',
         Pickup: order.pickup || '',
         Delivery: order.delivery || '',
         Invoice: order.invoice || '',
+        Unit: order.measurement_unit || 'CTN',
+        Oversized: order.is_oversized ? 'yes' : '',
     }));
 
     return Papa.unparse({ fields: headers, data: rows });

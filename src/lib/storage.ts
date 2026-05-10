@@ -248,6 +248,59 @@ export async function deleteClientAttachments(clientId: string): Promise<boolean
   }
 }
 
+export async function uploadDeliveryPhoto(
+  orderId: string,
+  file: File
+): Promise<FileUploadResult> {
+  try {
+    const validationError = validateFile(file, true);
+    if (validationError) {
+      return { success: false, error: validationError };
+    }
+
+    const timestamp = Date.now();
+    const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+    const filePath = `delivery/${orderId}/${timestamp}-${sanitizedName}`;
+
+    const { error } = await supabase.storage
+      .from(ORDER_ATTACHMENTS_BUCKET)
+      .upload(filePath, file, { cacheControl: '3600', upsert: false });
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    const { data: urlData } = supabase.storage
+      .from(ORDER_ATTACHMENTS_BUCKET)
+      .getPublicUrl(filePath);
+
+    return { success: true, url: urlData.publicUrl };
+  } catch (error: unknown) {
+    return { success: false, error: (error as Error).message || 'Upload failed' };
+  }
+}
+
+export async function deleteDeliveryPhoto(publicUrl: string): Promise<boolean> {
+  try {
+    const bucketUrl = supabase.storage.from(ORDER_ATTACHMENTS_BUCKET).getPublicUrl('').data.publicUrl;
+    const filePath = publicUrl.replace(bucketUrl, '').replace(/^\//, '');
+    if (!filePath) return false;
+
+    const { error } = await supabase.storage
+      .from(ORDER_ATTACHMENTS_BUCKET)
+      .remove([filePath]);
+
+    if (error) {
+      console.error('Error deleting delivery photo:', error);
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.error('Error deleting delivery photo:', error);
+    return false;
+  }
+}
+
 /**
  * Get file extension from filename
  */

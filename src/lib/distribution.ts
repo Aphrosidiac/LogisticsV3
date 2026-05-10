@@ -10,7 +10,7 @@ interface DriverState {
   totalOrders: number;
 }
 
-function calculateTotalPallets(order: Order): number {
+export function calculateTotalPallets(order: Order): number {
   let pallets = order.pallets || 0;
   if (order.ctn_amount && order.ctn_to_pallet_ratio && order.ctn_to_pallet_ratio > 0) {
     pallets += Math.ceil(order.ctn_amount / order.ctn_to_pallet_ratio);
@@ -160,6 +160,14 @@ export function calculateDistribution(
   };
 }
 
+function palletRangeText(order: Order): string {
+  const p = order.pallets || 0;
+  if (order.pallets_max && order.pallets_max !== p) {
+    return `${p}-${order.pallets_max} pallet${order.pallets_max > 1 ? 's' : ''}`;
+  }
+  return `${p} pallet${p !== 1 ? 's' : ''}`;
+}
+
 /**
  * Format distribution message for WhatsApp
  */
@@ -204,12 +212,15 @@ export function formatDistributionMessage(result: DistributionResult): string {
           ? `${order.pickup} -> ${order.delivery}`
           : order.delivery || order.pickup || 'N/A';
 
-        const palletText = `${order.pallets} pallet${order.pallets > 1 ? 's' : ''}`;
+        const palletText = palletRangeText(order);
+        const unitLabel = (order.measurement_unit || 'CTN').toLowerCase();
+        const ctnText = order.ctn_amount ? ` + ${order.ctn_amount}${unitLabel}` : '';
         const doText = order.do_number ? ` [DO: ${order.do_number}]` : '';
         const priorityText = order.priority === 'high' ? ' [HIGH PRIORITY]' : '';
         const partialText = order.rawData?._partial === 'true' ? ' [PARTIAL]' : '';
+        const oversizedText = order.is_oversized ? ' [PANJANG]' : '';
 
-        lines.push(`      - ${route} (${palletText})${doText}${priorityText}${partialText}`);
+        lines.push(`      - ${route} (${palletText}${ctnText})${doText}${priorityText}${oversizedText}${partialText}`);
       }
     }
     lines.push('');
@@ -272,9 +283,12 @@ export function formatDriverAssignmentMessage(assignment: DriverAssignment): str
       const route = order.pickup && order.delivery
         ? `${order.pickup} → ${order.delivery}`
         : order.delivery || order.pickup || 'N/A';
+      const unitLabel = (order.measurement_unit || 'CTN').toLowerCase();
+      const ctnText = order.ctn_amount ? ` + ${order.ctn_amount}${unitLabel}` : '';
       const doText = order.do_number ? ` [DO: ${order.do_number}]` : '';
       const priorityText = order.priority === 'high' ? ' ⚠️ HIGH PRIORITY' : '';
-      lines.push(`  • ${route} (${order.pallets} pallet${order.pallets > 1 ? 's' : ''})${doText}${priorityText}`);
+      const oversizedText = order.is_oversized ? ' 📏 PANJANG' : '';
+      lines.push(`  • ${route} (${palletRangeText(order)}${ctnText})${doText}${priorityText}${oversizedText}`);
     }
   }
 
@@ -300,11 +314,118 @@ export function formatSkippedOrdersMessage(skippedOrders: Order[]): string {
     const route = order.pickup && order.delivery
       ? `${order.pickup} → ${order.delivery}`
       : order.delivery || order.pickup || 'N/A';
+    const unitLabel = (order.measurement_unit || 'CTN').toLowerCase();
+    const ctnText = order.ctn_amount ? ` + ${order.ctn_amount}${unitLabel}` : '';
     const doText = order.do_number ? ` [DO: ${order.do_number}]` : '';
     const priorityText = order.priority === 'high' ? ' ⚠️ HIGH' : '';
-    lines.push(`• Zone ${order.zone}: ${route} (${order.pallets} pallet${order.pallets !== 1 ? 's' : ''})${doText}${priorityText}`);
+    lines.push(`• Zone ${order.zone}: ${route} (${palletRangeText(order)}${ctnText})${doText}${priorityText}`);
   }
 
   lines.push('================================');
+  return lines.join('\n');
+}
+
+export function formatDriverPickupList(assignment: DriverAssignment): string {
+  const lines: string[] = [];
+
+  lines.push('☀️☀️☀️☀️☀️☀️☀️☀️☀️');
+
+  const zoneName = assignment.zones.length > 0 ? assignment.zones[0] : 'KL';
+  lines.push(`Ambil barang ${zoneName.toLowerCase()}`);
+
+  // Group orders by pickup_company — track pallet-only and CTN orders separately
+  const pickupMap = new Map<string, { basePallets: number; basePalletsMax: number; ctnTexts: string[]; isOversized: boolean; isHigh: boolean }>();
+
+  for (const order of assignment.orders) {
+    const company = order.pickup_company || order.pickup || 'Unknown';
+    const existing = pickupMap.get(company) || { basePallets: 0, basePalletsMax: 0, ctnTexts: [], isOversized: false, isHigh: false };
+
+    if (order.ctn_amount) {
+      const unit = (order.measurement_unit || 'CTN').toLowerCase();
+      if (order.ctn_to_pallet_ratio && order.ctn_to_pallet_ratio > 0) {
+        const floor = Math.floor(order.ctn_amount / order.ctn_to_pallet_ratio);
+        const ceil = Math.ceil(order.ctn_amount / order.ctn_to_pallet_ratio);
+        existing.ctnTexts.push(floor !== ceil
+          ? `${order.ctn_amount}${unit}(${floor}-${ceil})p`
+          : `${order.ctn_amount}${unit}(${ceil})p`);
+      } else {
+        existing.ctnTexts.push(`${order.ctn_amount}${unit}`);
+      }
+    } else {
+      existing.basePallets += order.pallets || 0;
+      existing.basePalletsMax += order.pallets_max || order.pallets || 0;
+    }
+
+    if (order.is_oversized) existing.isOversized = true;
+    if (order.priority === 'high') existing.isHigh = true;
+
+    pickupMap.set(company, existing);
+  }
+
+  let index = 1;
+  for (const [company, info] of pickupMap) {
+    let line = `${index})${company.toLowerCase()} `;
+
+    const parts: string[] = [];
+    if (info.basePallets > 0) {
+      parts.push(info.basePalletsMax !== info.basePallets
+        ? `${info.basePallets}-${info.basePalletsMax}p`
+        : `${info.basePallets}p`);
+    }
+    parts.push(...info.ctnTexts);
+
+    line += parts.join('+') || '0p';
+
+    if (info.isOversized) line += ' panjang';
+    if (info.isHigh) line += '🚨🚨🚨';
+
+    lines.push(line);
+    index++;
+  }
+
+  return lines.join('\n');
+}
+
+export function formatPickupVerificationMessage(
+  date: string,
+  orders: Order[],
+  verifiedMap: Map<string, boolean>,
+): string {
+  const lines: string[] = [];
+  lines.push('COLLECT BY SHUDA');
+  lines.push(`COLLECT DATE : ${date}`);
+
+  // Group by delivery_company
+  const byCompany = new Map<string, Order[]>();
+  for (const order of orders) {
+    const company = order.delivery_company || order.delivery || 'Unknown';
+    if (!byCompany.has(company)) byCompany.set(company, []);
+    byCompany.get(company)!.push(order);
+  }
+
+  let index = 1;
+  for (const [company, companyOrders] of byCompany) {
+    const doNumbers = companyOrders.map(o => {
+      const verified = verifiedMap.get(o.id) ?? false;
+      return `${o.do_number || 'N/A'}${verified ? '✅' : '❌'}`;
+    }).join(', ');
+
+    const quantityParts = companyOrders.map(o => {
+      const unit = (o.measurement_unit || 'CTN').toUpperCase();
+      const parts: string[] = [];
+      if (o.pallets) {
+        const palletText = o.pallets_max && o.pallets_max !== o.pallets
+          ? `${o.pallets}-${o.pallets_max} PALLET`
+          : `${o.pallets} PALLET`;
+        parts.push(palletText);
+      }
+      if (o.ctn_amount) parts.push(`${o.ctn_amount} ${unit}`);
+      return parts.join(' + ') || `${o.pallets} PALLET`;
+    });
+
+    lines.push(`${index}) ${company.toUpperCase()} (${doNumbers}) ${quantityParts.join(' + ')}`);
+    index++;
+  }
+
   return lines.join('\n');
 }

@@ -80,6 +80,13 @@ function validateOrder(data: Partial<Order>): Record<string, string> {
         e.pallets = 'Must be a whole number (no decimals)';
     }
 
+    if (data.pallets_max !== undefined && data.pallets_max !== null && String(data.pallets_max) !== '') {
+        const maxP = Number(data.pallets_max);
+        if (isNaN(maxP) || maxP < 1 || maxP > 99) e.pallets_max = 'Must be a whole number between 1 and 99';
+        else if (!Number.isInteger(maxP)) e.pallets_max = 'Must be a whole number';
+        else if (!isNaN(pallets) && maxP <= pallets) e.pallets_max = 'Must be greater than min pallets';
+    }
+
     if (data.ctn_amount !== undefined && data.ctn_amount !== null && String(data.ctn_amount) !== '') {
         const ctn = Number(data.ctn_amount);
         if (isNaN(ctn) || ctn < 0) e.ctn_amount = 'Must be 0 or greater';
@@ -460,6 +467,9 @@ export default function DatabaseManagerPage() {
                 const palletsRaw = get('pallets', 'pallet', 'qty', 'quantity');
                 const zoneRaw = get('zone', 'area', 'region');
 
+                const unitRaw = get('unit', 'measurementunit', 'measurement unit', 'measureunit');
+                const palletsMaxRaw = get('palletsmax', 'pallets max', 'maxpallets', 'max pallets');
+
                 const orderData: Partial<Order> = {
                     do_number: get('donumber', 'do number', 'do#', 'do') || undefined,
                     invoice_number: get('invoicenumber', 'invoice number', 'invoice', 'inv') || undefined,
@@ -468,8 +478,10 @@ export default function DatabaseManagerPage() {
                     pickup: get('pickup', 'from', 'origin', 'pickuplocation', 'pickup location') || undefined,
                     delivery: get('delivery', 'to', 'destination', 'deliverylocation', 'delivery location') || undefined,
                     pallets: palletsRaw ? parseInt(palletsRaw) : undefined,
+                    pallets_max: palletsMaxRaw ? parseInt(palletsMaxRaw) : undefined,
                     ctn_amount: get('ctn', 'ctnamount', 'ctn amount', 'cartons') ? parseInt(get('ctn', 'ctnamount', 'ctn amount', 'cartons')) : undefined,
                     ctn_to_pallet_ratio: get('ctnperpallet', 'ctn per pallet', 'ctntopallet', 'ctnratio') ? parseInt(get('ctnperpallet', 'ctn per pallet', 'ctntopallet', 'ctnratio')) : undefined,
+                    measurement_unit: (['CTN', 'Roll', 'Ft', 'Bundle', 'Others'].find(u => u.toLowerCase() === unitRaw.toLowerCase()) || 'CTN') as Order['measurement_unit'],
                     priority: get('priority') === 'high' ? 'high' : 'standard',
                     status: 'pending',
                 };
@@ -1180,6 +1192,7 @@ function OrderForm({ initial, saving, onSave, onCancel }: {
     const [removeAttachment, setRemoveAttachment] = useState(false);
     const [clients, setClients] = useState<Client[]>([]);
     const [selectedPickupClientId, setSelectedPickupClientId] = useState<string | undefined>();
+    const [selectedDeliveryClientId, setSelectedDeliveryClientId] = useState<string | undefined>();
 
     const savedUrl = removeAttachment ? undefined : (initial.attachment_urls?.[0]);
 
@@ -1195,6 +1208,18 @@ function OrderForm({ initial, saving, onSave, onCancel }: {
         }));
     }
 
+    function applyDeliveryClient(client: Client) {
+        setData(prev => ({
+            ...prev,
+            delivery_company: client.company_name,
+            delivery_address: client.address || '',
+            delivery_postcode: client.postcode || '',
+            delivery_area: client.area || '',
+            delivery_state: client.state || '',
+            delivery_phone: client.phone || '',
+        }));
+    }
+
     useEffect(() => {
         db.getAllClients().then(list => {
             setClients(list);
@@ -1203,6 +1228,17 @@ function OrderForm({ initial, saving, onSave, onCancel }: {
                 if (defaultClient && !data.pickup_company) {
                     applyPickupClient(defaultClient);
                     setSelectedPickupClientId(defaultClient.id);
+                }
+            } else {
+                // On edit: match delivery_company to a client for pre-selection
+                if (resolvedInitial.delivery_company) {
+                    const match = list.find(c => c.company_name.toLowerCase() === resolvedInitial.delivery_company!.toLowerCase());
+                    if (match) setSelectedDeliveryClientId(match.id);
+                }
+                // On edit: match pickup_company to a client for pre-selection
+                if (resolvedInitial.pickup_company) {
+                    const match = list.find(c => c.company_name.toLowerCase() === resolvedInitial.pickup_company!.toLowerCase());
+                    if (match) setSelectedPickupClientId(match.id);
                 }
             }
         });
@@ -1232,6 +1268,31 @@ function OrderForm({ initial, saving, onSave, onCancel }: {
         setClients(prev => [...prev, newClient].sort((a, b) => a.company_name.localeCompare(b.company_name)));
         setSelectedPickupClientId(newClient.id);
         setData(prev => ({ ...prev, pickup_company: companyName }));
+    }
+
+    function handleDeliverySelect(client: Client) {
+        setSelectedDeliveryClientId(client.id);
+        applyDeliveryClient(client);
+    }
+
+    function handleDeliveryClear() {
+        setSelectedDeliveryClientId(undefined);
+        setData(prev => ({
+            ...prev,
+            delivery_company: '',
+            delivery_address: '',
+            delivery_postcode: '',
+            delivery_area: '',
+            delivery_state: '',
+            delivery_phone: '',
+        }));
+    }
+
+    async function handleDeliveryQuickAdd(companyName: string) {
+        const newClient = await db.addClient({ company_name: companyName, delivery_locations: [] });
+        setClients(prev => [...prev, newClient].sort((a, b) => a.company_name.localeCompare(b.company_name)));
+        setSelectedDeliveryClientId(newClient.id);
+        setData(prev => ({ ...prev, delivery_company: companyName }));
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1321,6 +1382,7 @@ function OrderForm({ initial, saving, onSave, onCancel }: {
         const saveData = {
             ...data,
             pallets: Number(data.pallets),
+            pallets_max: data.pallets_max !== undefined && String(data.pallets_max) !== '' ? Number(data.pallets_max) : undefined,
             ctn_amount: data.ctn_amount !== undefined && String(data.ctn_amount) !== '' ? Number(data.ctn_amount) : undefined,
             ctn_to_pallet_ratio: data.ctn_to_pallet_ratio !== undefined && String(data.ctn_to_pallet_ratio) !== '' ? Number(data.ctn_to_pallet_ratio) : undefined,
             pickup: buildLocationText(data.pickup_company, data.pickup_address, data.pickup_postcode, data.pickup_area, data.pickup_state, data.pickup_phone) || data.pickup,
@@ -1330,6 +1392,31 @@ function OrderForm({ initial, saving, onSave, onCancel }: {
         if (saveData.zone_id?.startsWith('special::')) {
             saveData.zone_id = undefined;
             saveData.district_id = undefined;
+        }
+        // Sync address fields back to client if the client record is missing them
+        if (selectedPickupClientId) {
+            const client = clients.find(c => c.id === selectedPickupClientId);
+            if (client && !client.address && data.pickup_address) {
+                db.updateClient(selectedPickupClientId, {
+                    address: data.pickup_address,
+                    postcode: data.pickup_postcode,
+                    area: data.pickup_area,
+                    state: data.pickup_state,
+                    phone: data.pickup_phone,
+                });
+            }
+        }
+        if (selectedDeliveryClientId) {
+            const client = clients.find(c => c.id === selectedDeliveryClientId);
+            if (client && !client.address && data.delivery_address) {
+                db.updateClient(selectedDeliveryClientId, {
+                    address: data.delivery_address,
+                    postcode: data.delivery_postcode,
+                    area: data.delivery_area,
+                    state: data.delivery_state,
+                    phone: data.delivery_phone,
+                });
+            }
         }
         onSave(saveData, pendingFile, removeAttachment);
     }
@@ -1444,7 +1531,14 @@ function OrderForm({ initial, saving, onSave, onCancel }: {
                 </legend>
                 <div className="space-y-1">
                     <label className="text-xs font-medium text-zinc-300">Company Name</label>
-                    <input type="text" value={data.delivery_company || ''} onChange={e => set('delivery_company', e.target.value)} placeholder="e.g. YFM Industrial Sdn Bhd" className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-zinc-200 text-sm focus:outline-none focus:ring-1 focus:border-emerald-500 focus:ring-emerald-500/30 transition-colors" />
+                    <PickupSelector
+                        clients={clients}
+                        value={selectedDeliveryClientId}
+                        onSelect={handleDeliverySelect}
+                        onClear={handleDeliveryClear}
+                        onQuickAdd={handleDeliveryQuickAdd}
+                        placeholder="Search delivery company..."
+                    />
                 </div>
                 <div className="space-y-1">
                     <label className="text-xs font-medium text-zinc-300">Address</label>
@@ -1491,10 +1585,46 @@ function OrderForm({ initial, saving, onSave, onCancel }: {
             {/* Group 4: Quantities */}
             <fieldset className="space-y-3">
                 <legend className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">Quantities</legend>
-                <div className="grid grid-cols-3 gap-3">
-                    <FormField col={ORDER_COLS.find(c => c.key === 'pallets')!} value={data.pallets} error={touched.pallets ? errors.pallets : undefined} onChange={v => set('pallets', v)} />
-                    <FormField col={ORDER_COLS.find(c => c.key === 'ctn_amount')!} value={data.ctn_amount} error={touched.ctn_amount ? errors.ctn_amount : undefined} onChange={v => set('ctn_amount', v)} />
-                    <FormField col={ORDER_COLS.find(c => c.key === 'ctn_to_pallet_ratio')!} value={data.ctn_to_pallet_ratio} error={touched.ctn_to_pallet_ratio ? errors.ctn_to_pallet_ratio : undefined} onChange={v => set('ctn_to_pallet_ratio', v)} />
+                <div className="grid grid-cols-4 gap-3">
+                    <div className="space-y-1">
+                        <label className="text-xs font-medium text-zinc-300">Pallets <span className="text-rose-400 ml-0.5">*</span></label>
+                        <input type="number" min={1} max={99} step={1} value={data.pallets ?? ''} onChange={e => set('pallets', e.target.value === '' ? undefined : Number(e.target.value))} placeholder="1" className={`w-full px-3 py-2 bg-zinc-800 border rounded-lg text-zinc-200 text-sm focus:outline-none focus:ring-1 transition-colors ${touched.pallets && errors.pallets ? 'border-rose-500/70 focus:border-rose-500 focus:ring-rose-500/30' : 'border-zinc-700 focus:border-emerald-500 focus:ring-emerald-500/30'}`} />
+                        <p className="text-[10px] text-zinc-600">Min pallets (whole number, 1–99)</p>
+                        {touched.pallets && errors.pallets && <p className="text-xs text-rose-400">{errors.pallets}</p>}
+                    </div>
+                    <div className="space-y-1">
+                        <label className="text-xs font-medium text-zinc-300">Pallets Max</label>
+                        <input type="number" min={1} max={99} step={1} value={data.pallets_max ?? ''} onChange={e => set('pallets_max', e.target.value === '' ? undefined : Number(e.target.value))} placeholder="—" className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-zinc-200 text-sm focus:outline-none focus:ring-1 focus:border-emerald-500 focus:ring-emerald-500/30 transition-colors" />
+                        <p className="text-[10px] text-zinc-600">Optional upper range (e.g. 5-6p)</p>
+                    </div>
+                    <div className="space-y-1">
+                        <label className="text-xs font-medium text-zinc-300">
+                            {(data.measurement_unit || 'CTN') === 'Others' ? 'Amount' : `${data.measurement_unit || 'CTN'} Amount`}
+                        </label>
+                        <input type="number" min={0} step={1} value={data.ctn_amount ?? ''} onChange={e => set('ctn_amount', e.target.value === '' ? undefined : Number(e.target.value))} placeholder="0" className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-zinc-200 text-sm focus:outline-none focus:ring-1 focus:border-emerald-500 focus:ring-emerald-500/30 transition-colors" />
+                        <p className="text-[10px] text-zinc-600">Quantity (used with ratio for pallet conversion)</p>
+                    </div>
+                    <div className="space-y-1">
+                        <label className="text-xs font-medium text-zinc-300">Unit</label>
+                        <select value={data.measurement_unit || 'CTN'} onChange={e => set('measurement_unit', e.target.value)} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-zinc-200 text-sm focus:outline-none focus:ring-1 focus:border-emerald-500 focus:ring-emerald-500/30 transition-colors">
+                            <option value="CTN">CTN</option>
+                            <option value="Roll">Roll</option>
+                            <option value="Ft">Ft</option>
+                            <option value="Bundle">Bundle</option>
+                            <option value="Others">Others</option>
+                        </select>
+                    </div>
+                </div>
+                <div className="grid grid-cols-4 gap-3">
+                    <div className="col-span-2" />
+                    <div className="space-y-1 col-span-2">
+                        <label className="text-xs font-medium text-zinc-300">
+                            {(data.measurement_unit || 'CTN') === 'Others' ? 'Units' : data.measurement_unit || 'CTN'} per Pallet
+                        </label>
+                        <input type="number" min={0} step={1} value={data.ctn_to_pallet_ratio ?? ''} onChange={e => set('ctn_to_pallet_ratio', e.target.value === '' ? undefined : Number(e.target.value))} placeholder="—" className={`w-full px-3 py-2 bg-zinc-800 border rounded-lg text-zinc-200 text-sm focus:outline-none focus:ring-1 transition-colors ${touched.ctn_to_pallet_ratio && errors.ctn_to_pallet_ratio ? 'border-rose-500/70 focus:border-rose-500 focus:ring-rose-500/30' : 'border-zinc-700 focus:border-emerald-500 focus:ring-emerald-500/30'}`} />
+                        <p className="text-[10px] text-zinc-600">How many {(data.measurement_unit || 'CTN').toLowerCase() === 'others' ? 'units' : (data.measurement_unit || 'CTN').toLowerCase()}s equal one pallet</p>
+                        {touched.ctn_to_pallet_ratio && errors.ctn_to_pallet_ratio && <p className="text-xs text-rose-400">{errors.ctn_to_pallet_ratio}</p>}
+                    </div>
                 </div>
             </fieldset>
 
@@ -1504,6 +1634,10 @@ function OrderForm({ initial, saving, onSave, onCancel }: {
                 <div className="grid grid-cols-2 gap-3">
                     <FormField col={ORDER_COLS.find(c => c.key === 'priority')!} value={data.priority} error={errors.priority} onChange={v => set('priority', v)} />
                     <FormField col={ORDER_COLS.find(c => c.key === 'status')!} value={data.status} error={errors.status} onChange={v => set('status', v)} />
+                </div>
+                <div className="flex items-center gap-2 pt-1">
+                    <input type="checkbox" id="is_oversized" checked={!!data.is_oversized} onChange={e => set('is_oversized', e.target.checked)} className="w-4 h-4 rounded border-zinc-600 bg-zinc-800 text-emerald-500 focus:ring-emerald-500/30" />
+                    <label htmlFor="is_oversized" className="text-xs text-zinc-300">Panjang / Oversized item</label>
                 </div>
             </fieldset>
 

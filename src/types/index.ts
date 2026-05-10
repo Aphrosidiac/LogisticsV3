@@ -45,6 +45,9 @@ export interface Order {
   priority?: 'high' | 'standard';
   ctn_amount?: number;
   ctn_to_pallet_ratio?: number;
+  measurement_unit?: 'CTN' | 'Roll' | 'Ft' | 'Bundle' | 'Others';
+  is_oversized?: boolean;
+  pallets_max?: number;
   do_number?: string;
   invoice_number?: string;
   pickup?: string;
@@ -63,10 +66,15 @@ export interface Order {
   delivery_phone?: string;
   invoice?: string;
   attachment_urls?: string[];
-  status?: 'pending' | 'assigned' | 'in_progress' | 'completed' | 'cancelled';
+  status?: 'pending' | 'assigned' | 'picked_up' | 'in_progress' | 'completed' | 'cancelled';
   completed_date?: string;
   assigned_driver_id?: string;
   assigned_date?: string;
+  pickup_verified?: boolean;
+  pickup_verified_at?: string;
+  pickup_verified_by?: string;
+  delivery_photo_urls?: string[];
+  delivered_at?: string;
   created_at?: string;
   rawData: Record<string, string>;
 }

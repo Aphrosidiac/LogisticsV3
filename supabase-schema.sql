@@ -261,3 +261,19 @@ ALTER TABLE clients ADD COLUMN IF NOT EXISTS postcode TEXT;
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS area TEXT;
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS state TEXT;
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS is_default_pickup BOOLEAN DEFAULT false;
+
+-- === Features Update (May 2026) ===
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS measurement_unit TEXT DEFAULT 'CTN';
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS is_oversized BOOLEAN DEFAULT false;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS pickup_verified BOOLEAN DEFAULT false;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS pickup_verified_at TIMESTAMP WITH TIME ZONE;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS pickup_verified_by TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_photo_urls TEXT[] DEFAULT '{}';
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivered_at TIMESTAMP WITH TIME ZONE;
+
+ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_status_check;
+ALTER TABLE orders ADD CONSTRAINT orders_status_check
+  CHECK (status IN ('pending', 'assigned', 'picked_up', 'in_progress', 'completed', 'cancelled'));
+
+CREATE INDEX IF NOT EXISTS idx_orders_pickup_verified ON orders(pickup_verified);
+CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);

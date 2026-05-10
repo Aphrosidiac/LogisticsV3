@@ -52,6 +52,9 @@ export async function saveOrders(orders: Order[], sheetId?: string) {
         delivery_area: order.delivery_area || null,
         delivery_state: order.delivery_state || null,
         delivery_phone: order.delivery_phone || null,
+        measurement_unit: order.measurement_unit || 'CTN',
+        is_oversized: order.is_oversized || false,
+        pallets_max: order.pallets_max || null,
         attachment_urls: order.attachment_urls || [],
         raw_data: order.rawData || {},
       };
@@ -87,7 +90,10 @@ export async function getAllOrders(): Promise<Order[]> {
       status: (row.status as Order['status']) || 'pending',
       ctn_amount: row.ctn_amount,
       ctn_to_pallet_ratio: row.ctn_to_pallet_ratio,
+      measurement_unit: (row.measurement_unit as Order['measurement_unit']) || 'CTN',
+      is_oversized: row.is_oversized || false,
       pallets: row.pallets,
+      pallets_max: row.pallets_max || undefined,
       do_number: row.do_number,
       invoice_number: row.invoice_number,
       invoice: row.invoice_number,
@@ -107,6 +113,11 @@ export async function getAllOrders(): Promise<Order[]> {
       delivery_phone: row.delivery_phone || undefined,
       attachment_urls: row.attachment_urls || [],
       assigned_driver_id: row.assigned_driver_id || undefined,
+      pickup_verified: row.pickup_verified || false,
+      pickup_verified_at: row.pickup_verified_at || undefined,
+      pickup_verified_by: row.pickup_verified_by || undefined,
+      delivery_photo_urls: row.delivery_photo_urls || [],
+      delivered_at: row.delivered_at || undefined,
       created_at: row.created_at || undefined,
       rawData: row.raw_data || {},
     }));
@@ -142,7 +153,10 @@ export async function addOrder(order: Partial<Order>): Promise<Order> {
       status: order.status || 'pending',
       ctn_amount: order.ctn_amount ?? null,
       ctn_to_pallet_ratio: order.ctn_to_pallet_ratio ?? null,
+      measurement_unit: order.measurement_unit || 'CTN',
+      is_oversized: order.is_oversized || false,
       pallets: order.pallets || 0,
+      pallets_max: order.pallets_max || null,
       do_number: order.do_number || null,
       invoice_number: order.invoice_number || null,
       pickup: order.pickup || null,
@@ -183,6 +197,9 @@ export async function updateOrder(id: string, updates: Partial<Order>) {
     if (updates.pallets !== undefined) payload.pallets = updates.pallets;
     if (updates.ctn_amount !== undefined) payload.ctn_amount = updates.ctn_amount ?? null;
     if (updates.ctn_to_pallet_ratio !== undefined) payload.ctn_to_pallet_ratio = updates.ctn_to_pallet_ratio ?? null;
+    if (updates.measurement_unit !== undefined) payload.measurement_unit = updates.measurement_unit || 'CTN';
+    if (updates.is_oversized !== undefined) payload.is_oversized = updates.is_oversized || false;
+    if (updates.pallets_max !== undefined) payload.pallets_max = updates.pallets_max || null;
     if (updates.do_number !== undefined) payload.do_number = updates.do_number || null;
     if (updates.invoice_number !== undefined) payload.invoice_number = updates.invoice_number || null;
     if (updates.pickup !== undefined) payload.pickup = updates.pickup || null;
@@ -295,6 +312,187 @@ export async function markOrdersAsCompleted(orderIds: string[], driverId?: strin
     if (error) throw error;
   } catch (error) {
     console.error('Error marking orders as completed:', error);
+    throw error;
+  }
+}
+
+export async function markOrdersAsPickedUp(
+  orderIds: string[],
+  verifiedBy: string
+): Promise<void> {
+  if (orderIds.length === 0) return;
+  try {
+    const now = new Date().toISOString();
+    const { error } = await supabase
+      .from(TABLES.ORDERS)
+      .update({
+        status: 'picked_up',
+        pickup_verified: true,
+        pickup_verified_at: now,
+        pickup_verified_by: verifiedBy,
+        updated_at: now,
+      })
+      .in('id', orderIds);
+    if (error) throw error;
+  } catch (error) {
+    console.error('Error marking orders as picked up:', error);
+    throw error;
+  }
+}
+
+export async function markOrdersAsNotCollected(orderIds: string[], verifiedBy?: string): Promise<void> {
+  if (orderIds.length === 0) return;
+  try {
+    const now = new Date().toISOString();
+    const { error } = await supabase
+      .from(TABLES.ORDERS)
+      .update({
+        pickup_verified: false,
+        pickup_verified_at: now,
+        pickup_verified_by: verifiedBy || null,
+        updated_at: now,
+      })
+      .in('id', orderIds);
+    if (error) throw error;
+  } catch (error) {
+    console.error('Error marking orders as not collected:', error);
+    throw error;
+  }
+}
+
+export async function getAssignedOrdersForDate(date: string): Promise<Order[]> {
+  try {
+    const { data, error } = await supabase
+      .from(TABLES.ORDERS)
+      .select('*')
+      .eq('date', date)
+      .in('status', ['assigned', 'picked_up'])
+      .order('assigned_driver_id');
+    if (error) throw error;
+    return (data || []).map((row) => ({
+      id: row.id,
+      zone: row.zone,
+      zone_id: row.zone_id,
+      district_id: row.district_id,
+      date: row.date,
+      priority: (row.priority as 'high' | 'standard') || 'standard',
+      status: (row.status as Order['status']) || 'pending',
+      ctn_amount: row.ctn_amount,
+      ctn_to_pallet_ratio: row.ctn_to_pallet_ratio,
+      measurement_unit: (row.measurement_unit as Order['measurement_unit']) || 'CTN',
+      is_oversized: row.is_oversized || false,
+      pallets: row.pallets,
+      pallets_max: row.pallets_max || undefined,
+      do_number: row.do_number,
+      invoice_number: row.invoice_number,
+      pickup: row.pickup,
+      pickup_company: row.pickup_company || undefined,
+      delivery: row.delivery,
+      delivery_company: row.delivery_company || undefined,
+      attachment_urls: row.attachment_urls || [],
+      assigned_driver_id: row.assigned_driver_id || undefined,
+      pickup_verified: row.pickup_verified || false,
+      pickup_verified_at: row.pickup_verified_at || undefined,
+      pickup_verified_by: row.pickup_verified_by || undefined,
+      delivery_photo_urls: row.delivery_photo_urls || [],
+      delivered_at: row.delivered_at || undefined,
+      created_at: row.created_at || undefined,
+      rawData: row.raw_data || {},
+    }));
+  } catch (error) {
+    console.error('Error getting assigned orders for date:', error);
+    return [];
+  }
+}
+
+export async function getOrdersForDeliveryPage(date: string): Promise<Order[]> {
+  try {
+    const { data, error } = await supabase
+      .from(TABLES.ORDERS)
+      .select('*')
+      .eq('date', date)
+      .in('status', ['assigned', 'picked_up', 'completed'])
+      .order('assigned_driver_id');
+    if (error) throw error;
+    return (data || []).map((row) => ({
+      id: row.id,
+      zone: row.zone,
+      zone_id: row.zone_id,
+      district_id: row.district_id,
+      date: row.date,
+      priority: (row.priority as 'high' | 'standard') || 'standard',
+      status: (row.status as Order['status']) || 'pending',
+      ctn_amount: row.ctn_amount,
+      ctn_to_pallet_ratio: row.ctn_to_pallet_ratio,
+      measurement_unit: (row.measurement_unit as Order['measurement_unit']) || 'CTN',
+      is_oversized: row.is_oversized || false,
+      pallets: row.pallets,
+      pallets_max: row.pallets_max || undefined,
+      do_number: row.do_number,
+      invoice_number: row.invoice_number,
+      pickup: row.pickup,
+      pickup_company: row.pickup_company || undefined,
+      delivery: row.delivery,
+      delivery_company: row.delivery_company || undefined,
+      attachment_urls: row.attachment_urls || [],
+      assigned_driver_id: row.assigned_driver_id || undefined,
+      pickup_verified: row.pickup_verified || false,
+      pickup_verified_at: row.pickup_verified_at || undefined,
+      pickup_verified_by: row.pickup_verified_by || undefined,
+      delivery_photo_urls: row.delivery_photo_urls || [],
+      delivered_at: row.delivered_at || undefined,
+      created_at: row.created_at || undefined,
+      rawData: row.raw_data || {},
+    }));
+  } catch (error) {
+    console.error('Error getting orders for delivery page:', error);
+    return [];
+  }
+}
+
+export async function updateDeliveryPhotos(
+  orderId: string,
+  photoUrls: string[]
+): Promise<void> {
+  try {
+    const now = new Date().toISOString();
+    const payload: Record<string, unknown> = {
+      delivery_photo_urls: photoUrls,
+      updated_at: now,
+    };
+    if (photoUrls.length === 0) {
+      payload.status = 'picked_up';
+      payload.delivered_at = null;
+    }
+    const { error } = await supabase
+      .from(TABLES.ORDERS)
+      .update(payload)
+      .eq('id', orderId);
+    if (error) throw error;
+  } catch (error) {
+    console.error('Error updating delivery photos:', error);
+    throw error;
+  }
+}
+
+export async function markOrderAsDelivered(
+  orderId: string,
+  photoUrls: string[]
+): Promise<void> {
+  try {
+    const now = new Date().toISOString();
+    const { error } = await supabase
+      .from(TABLES.ORDERS)
+      .update({
+        status: 'completed',
+        delivery_photo_urls: photoUrls,
+        delivered_at: now,
+        updated_at: now,
+      })
+      .eq('id', orderId);
+    if (error) throw error;
+  } catch (error) {
+    console.error('Error marking order as delivered:', error);
     throw error;
   }
 }

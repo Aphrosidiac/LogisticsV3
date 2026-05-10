@@ -15,12 +15,16 @@ import {
     MapPin,
     Building2,
     LogOut,
+    ClipboardCheck,
+    Camera,
 } from 'lucide-react';
 
 const navItems = [
     { href: '/', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/sheets-manager', label: 'Database Manager', icon: Database },
     { href: '/distribution', label: 'Distribution', icon: Truck },
+    { href: '/pickup-verification', label: 'Pickup Verify', icon: ClipboardCheck },
+    { href: '/delivery-confirmation', label: 'Delivery Confirm', icon: Camera },
     { href: '/completed-orders', label: 'Completed Orders', icon: CheckCircle },
     { href: '/zones', label: 'Zones & Districts', icon: MapPin },
     { href: '/clients', label: 'Clients', icon: Building2 },

@@ -11,6 +11,7 @@ interface PickupSelectorProps {
   onClear: () => void;
   onQuickAdd: (companyName: string) => void;
   disabled?: boolean;
+  placeholder?: string;
 }
 
 export default function PickupSelector({
@@ -20,6 +21,7 @@ export default function PickupSelector({
   onClear,
   onQuickAdd,
   disabled = false,
+  placeholder = 'Search pickup company...',
 }: PickupSelectorProps) {
   const [query, setQuery] = useState('');
   const [isOpen, setIsOpen] = useState(false);
@@ -165,7 +167,7 @@ export default function PickupSelector({
             onFocus={() => setIsOpen(true)}
             onKeyDown={handleKeyDown}
             disabled={disabled}
-            placeholder="Search pickup company..."
+            placeholder={placeholder}
             className="w-full bg-zinc-800 border border-zinc-700 rounded-lg pl-9 pr-3 py-2 text-zinc-200 text-sm placeholder-zinc-600 focus:outline-none focus:ring-1 focus:border-emerald-500 focus:ring-emerald-500/30 transition-colors"
           />
           {selectedClient && (
