@@ -26,19 +26,23 @@ function findBestDriver(
   zone: string,
   orderPallets: number,
   driverStates: DriverState[],
+  maxOrdersPerDriver: number,
 ): DriverState | null {
   const available = driverStates.filter(s => s.remainingCapacity >= orderPallets);
   if (available.length === 0) return null;
 
-  // Sort by most remaining capacity (spreads load evenly)
-  available.sort((a, b) => b.remainingCapacity - a.remainingCapacity);
+  // Among zone-serving drivers still below the adaptive cap, pick least loaded
+  const zoneFit = available.filter(s =>
+    s.zones.includes(zone) && s.totalOrders < maxOrdersPerDriver
+  );
+  if (zoneFit.length > 0) {
+    zoneFit.sort((a, b) => a.totalOrders - b.totalOrders || b.remainingCapacity - a.remainingCapacity);
+    return zoneFit[0];
+  }
 
-  // Among top candidates (within 2 pallets of most free), prefer zone affinity
-  const maxCap = available[0].remainingCapacity;
-  const top = available.filter(s => s.remainingCapacity >= maxCap - 2);
-  const zoneMatch = top.find(s => s.zones.includes(zone));
-
-  return zoneMatch || top[0];
+  // Fallback: least loaded driver overall
+  available.sort((a, b) => a.totalOrders - b.totalOrders || b.remainingCapacity - a.remainingCapacity);
+  return available[0];
 }
 
 export function getTomorrowDate(): string {
@@ -97,12 +101,15 @@ export function calculateDistribution(
 
   const skippedOrders: Order[] = [];
 
+  // Adaptive cap: each driver gets their fair share before zone priority releases to spread load
+  const maxOrdersPerDriver = Math.max(1, Math.ceil(filteredOrders.length / drivers.length));
+
   // Assign zone by zone: each zone's orders go to the same driver when possible
   for (const zone of zoneKeys) {
     const zoneOrders = zoneOrderMap.get(zone)!;
     for (const order of zoneOrders) {
       const pallets = order.calculatedPallets;
-      const best = findBestDriver(zone, pallets, driverStates);
+      const best = findBestDriver(zone, pallets, driverStates, maxOrdersPerDriver);
 
       if (!best) {
         skippedOrders.push(order);
