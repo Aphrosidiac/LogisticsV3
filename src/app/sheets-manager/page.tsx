@@ -97,7 +97,7 @@ function validateOrder(data: Partial<Order>): Record<string, string> {
         const ratio = Number(data.ctn_to_pallet_ratio);
         const ctnAmt = Number(data.ctn_amount) || 0;
         if (isNaN(ratio)) e.ctn_to_pallet_ratio = 'Must be a number';
-        else if (ctnAmt > 0 && ratio < 1) e.ctn_to_pallet_ratio = 'Must be 1 or greater when CTN Amount is set';
+        else if (ctnAmt > 0 && ratio > 0 && ratio < 1) e.ctn_to_pallet_ratio = 'Must be 1 or greater when set';
         else if (ratio < 0) e.ctn_to_pallet_ratio = 'Cannot be negative';
         else if (!Number.isInteger(ratio)) e.ctn_to_pallet_ratio = 'Must be a whole number';
     }

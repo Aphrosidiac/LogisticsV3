@@ -27,21 +27,18 @@ function findBestDriver(
   orderPallets: number,
   driverStates: DriverState[],
 ): DriverState | null {
-  // 1. Prefer drivers already serving this zone who still have capacity
-  const zoneDrivers = driverStates.filter(
-    s => s.remainingCapacity >= orderPallets && s.zones.includes(zone)
-  );
-  if (zoneDrivers.length > 0) {
-    return zoneDrivers[Math.floor(Math.random() * zoneDrivers.length)];
-  }
-
-  // 2. Fall back to any driver with capacity (already shuffled)
   const available = driverStates.filter(s => s.remainingCapacity >= orderPallets);
-  if (available.length > 0) {
-    return available[0];
-  }
+  if (available.length === 0) return null;
 
-  return null;
+  // Sort by most remaining capacity (spreads load evenly)
+  available.sort((a, b) => b.remainingCapacity - a.remainingCapacity);
+
+  // Among top candidates (within 2 pallets of most free), prefer zone affinity
+  const maxCap = available[0].remainingCapacity;
+  const top = available.filter(s => s.remainingCapacity >= maxCap - 2);
+  const zoneMatch = top.find(s => s.zones.includes(zone));
+
+  return zoneMatch || top[0];
 }
 
 export function getTomorrowDate(): string {
